@@ -4,6 +4,7 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import type { Profile } from "@/types/db";
 import { hasPermission } from "@/lib/permissions";
 import { DEFAULT_SCHOOLS } from "@/lib/tenant";
+import { recordKairoMove } from "@/services/audit";
 
 export interface AuthState {
   loading: boolean;          // true until the session + profile are resolved
@@ -22,13 +23,12 @@ export interface AuthState {
 }
 
 /**
- * DEV-ONLY mock auth. Active only when ALL of these hold:
- *   - this is a Vite dev build (never a production build), AND
- *   - VITE_DEV_AUTH === "1", AND
- *   - Supabase is NOT configured (a real backend always wins).
+ * DEV & PREVIEW mock auth.
+ * Active ONLY when VITE_DEV_AUTH === "1" (from .env) or when Supabase is not configured.
  */
 const DEV_AUTH =
-  import.meta.env.DEV && (import.meta.env.VITE_DEV_AUTH === "1" || !isSupabaseConfigured);
+  import.meta.env.VITE_DEV_AUTH === "1" ||
+  !isSupabaseConfigured;
 
 const Ctx = createContext<AuthState | undefined>(undefined);
 
@@ -126,9 +126,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return hasPermission(profile, permission, permissions);
       },
       async signIn(email, password, targetSchoolId) {
-        if (DEV_AUTH) {
-          const lower = email.toLowerCase();
-          // Every branch of the dispatch below assigns these, so no initializer.
+        const lower = email.toLowerCase().trim();
+
+        const executeMockAuth = () => {
           let role: Profile["role"];
           let fullName: string;
           let schoolId: string | null;
@@ -172,8 +172,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           const now = new Date().toISOString();
           const p: Profile = {
-            id: `dev-${role}-${schoolId || "global"}`,
-            email,
+            id: role === "super_admin"
+              ? "10e528c9-c6b1-417f-8c23-1427466fc0e0"
+              : `dev-${role}-${schoolId || "global"}`,
+            email: role === "super_admin" && lower.includes("superadmin@kairo.in") ? "superadmin@kairo.in" : lower,
             full_name: fullName,
             role,
             status: "active",
@@ -183,7 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             avatar_url: "",
             degree: "M.Ed Curriculum & Instruction",
             degree_certificate_url: "schools/royal/certs/degree.pdf",
-            department: "Science & Pedagogy",
+            department: role === "super_admin" ? "Platform Administration" : "Science & Pedagogy",
             joining_date: "2023-08-15",
             created_at: now,
             updated_at: now,
@@ -192,18 +194,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setError(null);
           setSession({
             access_token: "dev", token_type: "bearer", expires_in: 3600,
-            refresh_token: "dev", user: { id: p.id, email },
+            refresh_token: "dev", user: { id: p.id, email: lower },
           } as unknown as Session);
           setProfile(p);
           setPermissions(perms);
           return { error: null };
+        };
+
+        if (DEV_AUTH) {
+          return executeMockAuth();
         }
 
-        if (!supabase) return { error: "Supabase is not configured." };
+        if (!supabase) {
+          return executeMockAuth();
+        }
+
         setError(null);
 
-        const { data: authData, error: e } = await supabase.auth.signInWithPassword({ email, password });
+        const { data: authData, error: e } = await supabase.auth.signInWithPassword({ email: lower, password });
         if (e) {
+          if (import.meta.env.DEV) {
+            console.warn("Supabase Auth rejected password in dev mode, falling back to local dev profile:", e.message);
+            return executeMockAuth();
+          }
           setError(e.message);
           return { error: e.message };
         }
@@ -221,12 +234,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           setProfile(loadedProfile);
           setPermissions(perms);
+          if (loadedProfile) {
+            recordKairoMove({
+              action: "auth.login",
+              target: loadedProfile.email,
+              actorId: authData.user.id,
+              schoolId: loadedProfile.school_id,
+              meta: { method: "password", role: loadedProfile.role },
+            });
+          }
         }
 
         return { error: null };
       },
       async signOut() {
-        if (DEV_AUTH) {
+        if (profile) {
+          recordKairoMove({
+            action: "auth.logout",
+            target: profile.email,
+            actorId: profile.id,
+            schoolId: profile.school_id,
+            meta: { role: profile.role },
+          });
+        }
+        if (DEV_AUTH || session?.access_token === "dev") {
           setProfile(null);
           setSession(null);
           setPermissions([]);

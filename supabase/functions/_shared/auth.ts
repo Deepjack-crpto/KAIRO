@@ -5,7 +5,7 @@ import {
   type SupabaseClient,
 } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
-export type Role = "super_admin" | "admin" | "teacher";
+export type Role = "super_admin" | "admin" | "principal" | "teacher_admin" | "teacher";
 export type Status = "active" | "suspended" | "deactivated";
 
 export interface Caller {
@@ -14,6 +14,7 @@ export interface Caller {
   full_name: string;
   role: Role;
   status: Status;
+  school_id: string | null;
 }
 
 /** A client that bypasses RLS. Guard every use with explicit authorization checks. */
@@ -46,7 +47,7 @@ export async function getCaller(
 
   const { data: profile } = await svc
     .from("profiles")
-    .select("id,email,full_name,role,status")
+    .select("id,email,full_name,role,status,school_id")
     .eq("id", userData.user.id)
     .single();
 
@@ -60,8 +61,12 @@ export async function requireAdmin(
 ): Promise<Caller> {
   const caller = await getCaller(req, svc);
   if (!caller) throw new HttpError(401, "Not authenticated.");
-  // A super_admin has every administrator capability, so both roles pass here.
-  if ((caller.role !== "admin" && caller.role !== "super_admin") || caller.status !== "active") {
+  // A super_admin or principal/admin passes here.
+  const isPrivilegedAdmin =
+    caller.role === "admin" ||
+    caller.role === "principal" ||
+    caller.role === "super_admin";
+  if (!isPrivilegedAdmin || caller.status !== "active") {
     throw new HttpError(403, "Administrator access required.");
   }
   return caller;
@@ -107,6 +112,14 @@ export async function audit(
   action: string,
   target: string | null,
   meta: Record<string, unknown> = {},
+  schoolId?: string | null,
 ): Promise<void> {
-  await svc.from("audit_logs").insert({ actor_id: actorId, action, target, meta });
+  const finalSchoolId = schoolId || (meta?.school_id as string | undefined) || null;
+  await svc.from("audit_logs").insert({
+    actor_id: actorId,
+    action,
+    target,
+    meta,
+    school_id: finalSchoolId,
+  });
 }

@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useTenant } from "@/lib/tenant";
-import {
-  listTeacherTimetable,
-  computeScheduleStatus,
-} from "@/services/timetable";
-import { Spinner } from "@/components/ui";
+import { listTeacherTimetable, computeScheduleStatus } from "@/services/timetable";
+import { Spinner, EmptyState } from "@/components/ui";
+import { PageHeader } from "@/components/PageHeader";
 import type { TimetableRow } from "@/types/db";
 
 const DAYS = [
@@ -37,74 +35,75 @@ export default function TeacherTimetable() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight">My Teaching Timetable</h1>
-        <p className="text-sm text-fg/60">
-          Weekly schedule, period allocations, and assigned classroom locations
-        </p>
-      </div>
+      <PageHeader
+        title="My Teaching Timetable"
+        subtitle={`Weekly schedule, assigned periods, and classroom locations at ${school?.name || "your school"}.`}
+      />
 
       {/* Today's Live Status Overview */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="card p-4 border border-fg/10">
-          <span className="text-[11px] font-semibold text-fg/50 uppercase tracking-wider block mb-1">
+        {/* Previous Class */}
+        <div className="card p-4 border-border">
+          <span className="text-[11px] font-bold text-muted uppercase tracking-wider block mb-1">
             Previous Class
           </span>
           {status.previousClass ? (
             <div>
               <span className="font-bold text-sm text-fg block">{status.previousClass.subjectName}</span>
-              <span className="text-xs text-fg/60">
+              <span className="text-xs text-muted">
                 {status.previousClass.className} · {status.previousClass.start_time} - {status.previousClass.end_time}
               </span>
             </div>
           ) : (
-            <span className="text-xs text-fg/40 italic">No prior class today</span>
+            <span className="text-xs text-muted/70 italic">No prior class today</span>
           )}
         </div>
 
-        <div className="card p-4 border-2 border-accent/40 bg-accent-soft/20">
-          <span className="text-[11px] font-semibold text-accent uppercase tracking-wider block mb-1">
+        {/* Current Class */}
+        <div className="card p-4 border border-accent/40 bg-accent-soft/30 shadow-xs">
+          <span className="text-[11px] font-bold text-accent uppercase tracking-wider block mb-1">
             Current Active Class
           </span>
           {status.currentClass ? (
             <div>
-              <span className="font-bold text-base text-fg block">{status.currentClass.subjectName}</span>
-              <span className="text-xs text-fg/70 font-medium">
-                {status.currentClass.className} (Sec {status.currentClass.sectionName}) · {status.currentClass.room || "Assigned Room"}
+              <span className="font-extrabold text-base text-fg block">{status.currentClass.subjectName}</span>
+              <span className="text-xs text-fg/80 font-medium">
+                {status.currentClass.className} (Sec {status.currentClass.sectionName}) · {status.currentClass.room || "Room 101"}
               </span>
             </div>
           ) : (
-            <span className="text-xs text-fg/60 italic">Free Period right now</span>
+            <span className="text-xs text-accent font-semibold italic">Free Period right now</span>
           )}
         </div>
 
-        <div className="card p-4 border border-fg/10">
-          <span className="text-[11px] font-semibold text-fg/50 uppercase tracking-wider block mb-1">
+        {/* Next Class */}
+        <div className="card p-4 border-border">
+          <span className="text-[11px] font-bold text-muted uppercase tracking-wider block mb-1">
             Next Upcoming Class
           </span>
           {status.nextClass ? (
             <div>
               <span className="font-bold text-sm text-fg block">{status.nextClass.subjectName}</span>
-              <span className="text-xs text-fg/60">
+              <span className="text-xs text-muted">
                 {status.nextClass.className} · Starts {status.nextClass.start_time}
               </span>
             </div>
           ) : (
-            <span className="text-xs text-fg/40 italic">No more classes scheduled today</span>
+            <span className="text-xs text-muted/70 italic">No further periods today</span>
           )}
         </div>
       </div>
 
       {/* Day Selector */}
-      <div className="flex gap-2 border-b border-fg/10 pb-2 overflow-x-auto">
+      <div className="flex gap-2 border-b border-border/60 pb-3 overflow-x-auto">
         {DAYS.map((d) => (
           <button
             key={d.num}
             onClick={() => setSelectedDay(d.num)}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
+            className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
               selectedDay === d.num
-                ? "bg-accent text-white shadow-sm"
-                : "bg-surface text-fg/70 hover:text-fg hover:bg-surface/80"
+                ? "bg-accent text-white shadow-xs"
+                : "bg-surface text-muted hover:text-fg hover:bg-surface-hover"
             }`}
           >
             {d.label}
@@ -114,45 +113,48 @@ export default function TeacherTimetable() {
 
       {/* Schedule Table */}
       {loading ? (
-        <div className="card p-12 flex justify-center">
-          <Spinner label="Loading schedule…" />
+        <div className="card p-12 flex justify-center border-border">
+          <Spinner label="Loading class schedule…" />
         </div>
       ) : daySchedule.length === 0 ? (
-        <div className="card p-12 text-center text-sm text-fg/50">
-          No classes scheduled for this day. Free day for lesson planning and preparation.
-        </div>
+        <EmptyState
+          title="No classes scheduled for this day"
+          hint="Free day allocated for lesson preparation, curriculum exploration, and marking."
+        />
       ) : (
-        <div className="card overflow-hidden">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-surface/70 text-fg/60 border-b border-fg/5 uppercase tracking-wider text-[11px]">
-              <tr>
-                <th className="px-4 py-3">Period</th>
-                <th className="px-4 py-3">Time</th>
-                <th className="px-4 py-3">Class & Section</th>
-                <th className="px-4 py-3">Subject</th>
-                <th className="px-4 py-3">Room</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-fg/5 font-medium">
-              {daySchedule.map((entry) => (
-                <tr key={entry.id} className="hover:bg-surface/40 transition">
-                  <td className="px-4 py-3">
-                    <span className="badge bg-accent-soft text-accent font-bold">
-                      Period {entry.period_number}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-fg/70">
-                    {entry.start_time} - {entry.end_time}
-                  </td>
-                  <td className="px-4 py-3 text-fg">
-                    {entry.className} (Sec {entry.sectionName})
-                  </td>
-                  <td className="px-4 py-3 text-fg font-bold">{entry.subjectName}</td>
-                  <td className="px-4 py-3 text-fg/60">{entry.room || "Room 101"}</td>
+        <div className="card overflow-hidden border-border">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-surface text-muted border-b border-border uppercase tracking-wider text-[11px] font-semibold">
+                <tr>
+                  <th className="px-4 py-3">Period</th>
+                  <th className="px-4 py-3">Time</th>
+                  <th className="px-4 py-3">Class & Section</th>
+                  <th className="px-4 py-3">Subject</th>
+                  <th className="px-4 py-3">Room</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {daySchedule.map((entry) => (
+                  <tr key={entry.id} className="hover:bg-surface/50 transition-colors">
+                    <td className="px-4 py-3.5">
+                      <span className="badge bg-accent-soft text-accent border border-accent/20 font-bold">
+                        Period {entry.period_number}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 font-mono text-muted">
+                      {entry.start_time} - {entry.end_time}
+                    </td>
+                    <td className="px-4 py-3.5 font-semibold text-fg">
+                      {entry.className} (Sec {entry.sectionName})
+                    </td>
+                    <td className="px-4 py-3.5 font-bold text-accent">{entry.subjectName}</td>
+                    <td className="px-4 py-3.5 text-muted">{entry.room || "Room 101"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useTenant } from "@/lib/tenant";
 import { listRequests, submitRequest } from "@/services/requests";
-import { useToast, Spinner, StatusBadge } from "@/components/ui";
+import { useToast, Spinner, StatusBadge, EmptyState } from "@/components/ui";
+import { PageHeader } from "@/components/PageHeader";
 import type { TeacherRequest, RequestType } from "@/types/db";
 
 export default function TeacherRequests() {
@@ -16,16 +17,25 @@ export default function TeacherRequests() {
 
   // Form state
   const [reqType, setReqType] = useState<RequestType>("leave");
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState("Leave Request");
   const [reason, setReason] = useState("");
   const [leaveDate, setLeaveDate] = useState("");
   const [duration, setDuration] = useState("1 day");
   const [requestedPeriod, setRequestedPeriod] = useState(5);
   const [submitting, setSubmitting] = useState(false);
 
+  // Escape key handler for submit modal
+  useEffect(() => {
+    if (!modalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModalOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modalOpen]);
+
   const load = async () => {
     if (!profile || !school) return;
-    setLoading(true);
     try {
       const data = await listRequests({
         schoolId: school.id,
@@ -40,7 +50,6 @@ export default function TeacherRequests() {
   };
 
   useEffect(() => {
-    // load() is async and only sets state after awaiting — not a synchronous render cascade.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -75,9 +84,9 @@ export default function TeacherRequests() {
         details,
       });
 
-      toast("success", "Request submitted to Principal.");
+      toast("success", "Request submitted to Principal for review.");
       setModalOpen(false);
-      setTitle("");
+      setTitle("Leave Request");
       setReason("");
       load();
     } catch (err: any) {
@@ -90,36 +99,43 @@ export default function TeacherRequests() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Permissions & Requests</h1>
-          <p className="text-sm text-fg/60">
-            Submit leave requests, extra periods, or request Teacher Admin elevation
-          </p>
-        </div>
+        <PageHeader
+          title="Administrative Petitions & Requests"
+          subtitle={`Submit formal leave requests, extra period covers, or request Teacher Admin elevation from ${school?.name || "your school"}'s leadership.`}
+        />
 
         <button
           onClick={() => setModalOpen(true)}
-          className="btn-primary text-sm flex items-center gap-2"
+          className="btn-primary text-xs flex items-center gap-2 shrink-0 mb-6"
         >
           <span>+ Submit Request</span>
         </button>
       </div>
 
       {loading ? (
-        <div className="card p-12 flex justify-center">
-          <Spinner label="Loading requests…" />
+        <div className="card p-12 flex justify-center border-border">
+          <Spinner label="Loading your requests…" />
         </div>
       ) : requests.length === 0 ? (
-        <div className="card p-12 text-center text-sm text-fg/50">
-          You have not submitted any requests yet. Click "+ Submit Request" above to send a request to the Principal.
-        </div>
+        <EmptyState
+          title="No requests submitted yet"
+          hint="Click '+ Submit Request' above to submit a leave request, extra period coverage, or elevation request to the Principal."
+          action={
+            <button onClick={() => setModalOpen(true)} className="btn-primary text-xs">
+              Submit First Request
+            </button>
+          }
+        />
       ) : (
         <div className="space-y-4">
           {requests.map((r) => (
-            <div key={r.id} className="card p-5 space-y-3 hover:border-fg/15 transition">
+            <div
+              key={r.id}
+              className="card p-6 border-border hover:border-accent/40 hover:shadow-card-hover transition-all space-y-3"
+            >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-bold text-base text-fg">{r.title}</h3>
                     <StatusBadge
                       status={
@@ -130,11 +146,11 @@ export default function TeacherRequests() {
                           : "queued"
                       }
                     />
-                    <span className="badge bg-purple-50 text-purple-700 text-[10px] font-semibold uppercase">
+                    <span className="badge bg-purple-50 text-purple-700 border-purple-200 text-[10px] font-bold uppercase">
                       {r.type.replace("_", " ")}
                     </span>
                   </div>
-                  <span className="text-xs text-fg/50 mt-0.5 block">
+                  <span className="text-xs text-muted mt-1 block">
                     Submitted on{" "}
                     {new Date(r.created_at).toLocaleDateString([], {
                       month: "short",
@@ -145,23 +161,25 @@ export default function TeacherRequests() {
                 </div>
               </div>
 
-              <div className="bg-surface/50 p-3.5 rounded-xl border border-fg/5 text-xs text-fg/80 space-y-1">
+              <div className="bg-surface/50 p-4 rounded-xl border border-border/60 text-xs text-fg space-y-1.5 leading-relaxed">
                 {r.details?.date && (
                   <p>
-                    <strong>Date:</strong> {String(r.details.date)} ({String(r.details.duration || "1 day")})
+                    <strong className="text-fg">Target Date:</strong> {String(r.details.date)} (
+                    {String(r.details.duration || "1 day")})
                   </p>
                 )}
                 {r.details?.requested_period && (
                   <p>
-                    <strong>Requested Period:</strong> Period {String(r.details.requested_period)}
+                    <strong className="text-fg">Period:</strong> Period {String(r.details.requested_period)}
                   </p>
                 )}
                 <p>
-                  <strong>Reason:</strong> {String(r.details?.reason || r.title)}
+                  <strong className="text-fg">Reason:</strong> {String(r.details?.reason || r.title)}
                 </p>
                 {r.review_notes && (
-                  <div className="pt-2 border-t border-fg/10 text-accent font-medium">
-                    Principal Notes: {r.review_notes}
+                  <div className="pt-2 border-t border-border text-accent font-semibold flex items-start gap-1.5">
+                    <span>Principal Response:</span>
+                    <span>{r.review_notes}</span>
                   </div>
                 )}
               </div>
@@ -172,16 +190,37 @@ export default function TeacherRequests() {
 
       {/* Submit Request Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="card w-full max-w-lg p-6 bg-bg shadow-2xl relative">
-            <h2 className="text-lg font-bold text-fg mb-1">Submit Request to Principal</h2>
-            <p className="text-xs text-fg/60 mb-4">
-              Your request will be delivered to the Principal's office with an auditable lifecycle.
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in-up"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="request-modal-title"
+          onClick={() => setModalOpen(false)}
+        >
+          <div
+            className="card w-full max-w-lg p-6 bg-card border border-border shadow-card-elevated relative max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h2 id="request-modal-title" className="text-lg font-bold text-fg">
+                Submit Request to Principal
+              </h2>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="btn-outline text-xs px-2.5 py-1 font-semibold"
+                aria-label="Close dialog"
+              >
+                Close
+              </button>
+            </div>
+            <p className="text-xs text-muted mb-4">
+              Your request will be routed directly to the Principal&apos;s adjudication dashboard.
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-fg mb-1">Request Type</label>
+                <label className="label">Request Category</label>
                 <select
                   value={reqType}
                   onChange={(e) => {
@@ -197,44 +236,44 @@ export default function TeacherRequests() {
                       setTitle("Schedule Adjustment");
                     }
                   }}
-                  className="w-full rounded-lg border border-fg/15 bg-surface px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
+                  className="input"
                 >
                   <option value="leave">Leave Request (Sick / Personal)</option>
                   <option value="extra_period">Extra Period Request</option>
-                  <option value="schedule">Schedule / Free Period Request</option>
+                  <option value="schedule">Schedule / Free Period Adjustment</option>
                   <option value="teacher_admin">Request Teacher Admin Elevation</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-fg mb-1">Title</label>
+                <label className="label">Request Title</label>
                 <input
                   type="text"
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full rounded-lg border border-fg/15 bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                  className="input"
                 />
               </div>
 
               {reqType === "leave" && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-fg mb-1">Date</label>
+                    <label className="label">Date</label>
                     <input
                       type="date"
                       required
                       value={leaveDate}
                       onChange={(e) => setLeaveDate(e.target.value)}
-                      className="w-full rounded-lg border border-fg/15 bg-surface px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
+                      className="input text-xs"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-fg mb-1">Duration</label>
+                    <label className="label">Duration</label>
                     <select
                       value={duration}
                       onChange={(e) => setDuration(e.target.value)}
-                      className="w-full rounded-lg border border-fg/15 bg-surface px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
+                      className="input text-xs"
                     >
                       <option value="Half Day (Morning)">Half Day (Morning)</option>
                       <option value="Half Day (Afternoon)">Half Day (Afternoon)</option>
@@ -248,33 +287,31 @@ export default function TeacherRequests() {
 
               {reqType === "extra_period" && (
                 <div>
-                  <label className="block text-xs font-medium text-fg mb-1">Requested Period Number</label>
+                  <label className="label">Target Period Number</label>
                   <input
                     type="number"
                     min={1}
                     max={10}
                     value={requestedPeriod}
                     onChange={(e) => setRequestedPeriod(Number(e.target.value))}
-                    className="w-full rounded-lg border border-fg/15 bg-surface px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
+                    className="input"
                   />
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-medium text-fg mb-1">
-                  Reason & Detailed Justification
-                </label>
+                <label className="label">Reason & Justification</label>
                 <textarea
                   rows={3}
                   required
-                  placeholder="Provide clear rationale for the Principal's review…"
+                  placeholder="Provide context and notes for the Principal's review…"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  className="w-full rounded-lg border border-fg/15 bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                  className="input py-2 text-xs"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-border">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}

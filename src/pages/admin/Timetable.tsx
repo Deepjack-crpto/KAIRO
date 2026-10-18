@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useTenant } from "@/lib/tenant";
 import { listSchoolTimetable } from "@/services/timetable";
-import { useToast, Spinner } from "@/components/ui";
+import { useToast, Spinner, StatusBadge } from "@/components/ui";
+import { PageHeader } from "@/components/PageHeader";
 import type { TimetableRow } from "@/types/db";
 
 const DAYS = [
@@ -30,7 +31,6 @@ export default function AdminTimetable() {
 
   const load = async () => {
     if (!school) return;
-    setLoading(true);
     try {
       const data = await listSchoolTimetable(school.id);
       setTimetable(data);
@@ -42,7 +42,6 @@ export default function AdminTimetable() {
   };
 
   useEffect(() => {
-    // load() is async and only sets state after awaiting — not a synchronous render cascade.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -54,25 +53,21 @@ export default function AdminTimetable() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">School Timetable</h1>
-          <p className="text-sm text-fg/60">
-            Manage weekly schedules, period allocations, and assigned rooms
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="School Timetable"
+        subtitle={`Master weekly schedule, period allocations, and assigned rooms for ${school?.name || "your school"}.`}
+      />
 
       {/* Day Selector */}
-      <div className="flex gap-2 border-b border-fg/10 pb-2 overflow-x-auto">
+      <div className="flex gap-2 border-b border-border/60 pb-3 overflow-x-auto">
         {DAYS.map((d) => (
           <button
             key={d.num}
             onClick={() => setSelectedDay(d.num)}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
+            className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
               selectedDay === d.num
-                ? "bg-accent text-white shadow-sm"
-                : "bg-surface text-fg/70 hover:text-fg hover:bg-surface/80"
+                ? "bg-accent text-white shadow-xs"
+                : "bg-surface text-muted hover:text-fg hover:bg-surface-hover"
             }`}
           >
             {d.label}
@@ -81,8 +76,8 @@ export default function AdminTimetable() {
       </div>
 
       {loading ? (
-        <div className="card p-12 flex justify-center">
-          <Spinner label="Loading timetable schedule…" />
+        <div className="card p-12 flex justify-center border-border">
+          <Spinner label="Loading master timetable…" />
         </div>
       ) : (
         <div className="space-y-3">
@@ -91,24 +86,24 @@ export default function AdminTimetable() {
             return (
               <div
                 key={p.num}
-                className="card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-accent/40 transition"
+                className="card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-border hover:border-accent/40 hover:shadow-card-hover transition-all"
               >
                 <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent font-bold text-sm">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent font-extrabold text-sm border border-accent/20">
                     P{p.num}
                   </div>
                   <div>
-                    <span className="text-xs font-mono text-fg/50 block">{p.time}</span>
+                    <span className="text-xs font-mono text-muted block mb-0.5">{p.time}</span>
                     {entry ? (
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-bold text-base text-fg">{entry.subjectName}</span>
-                        <span className="badge bg-surface text-fg/80 text-xs">
+                        <span className="badge bg-surface text-fg border border-border text-xs">
                           {entry.className} · Sec {entry.sectionName}
                         </span>
                       </div>
                     ) : (
-                      <span className="font-semibold text-fg/40 text-sm italic">
-                        Free Period / Unassigned
+                      <span className="font-medium text-muted text-sm italic">
+                        Free Period / Available
                       </span>
                     )}
                   </div>
@@ -116,14 +111,18 @@ export default function AdminTimetable() {
 
                 <div className="flex items-center gap-4 text-xs">
                   {entry && (
-                    <div className="text-right sm:block hidden">
-                      <div className="font-medium text-fg">{entry.teacherName || "Assigned Teacher"}</div>
-                      <div className="text-fg/50">{entry.room || "Room Assigned"}</div>
+                    <div className="text-right hidden sm:block">
+                      <div className="font-bold text-fg">{entry.teacherName || "Assigned Faculty"}</div>
+                      <div className="text-muted text-[11px]">{entry.room || "Room 101"}</div>
                     </div>
                   )}
-                  <span className="badge bg-surface text-fg/60 text-xs">
-                    {entry ? "Active Schedule" : "Available"}
-                  </span>
+                  {entry ? (
+                    <StatusBadge status="active" />
+                  ) : (
+                    <span className="badge bg-surface text-muted border border-border">
+                      Free
+                    </span>
+                  )}
                 </div>
               </div>
             );

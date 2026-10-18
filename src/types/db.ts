@@ -6,6 +6,12 @@ export interface SchoolSettings {
   ai_enabled: boolean;
   face_auth_enabled: boolean;
   teacher_admin_enabled: boolean;
+  contact_email?: string;
+  contact_phone?: string;
+  address?: string;
+  timezone?: string;
+  subscription_tier?: string;
+  max_students?: number;
 }
 
 export interface School {

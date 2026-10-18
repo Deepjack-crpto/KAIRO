@@ -4,7 +4,8 @@ import { useAuth } from "@/features/auth/AuthContext";
 import { useTenant } from "@/lib/tenant";
 import { listRequests, reviewRequest } from "@/services/requests";
 import { PERMISSIONS } from "@/lib/permissions";
-import { useToast, Spinner, StatusBadge } from "@/components/ui";
+import { useToast, Spinner, StatusBadge, EmptyState } from "@/components/ui";
+import { PageHeader } from "@/components/PageHeader";
 import type { Profile, TeacherRequest } from "@/types/db";
 
 const AVAILABLE_PERMS = [
@@ -29,9 +30,18 @@ export default function AdminTeacherAdmins() {
   const [reviewingReq, setReviewingReq] = useState<TeacherRequest | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
 
+  // Escape listener for review modal
+  useEffect(() => {
+    if (!reviewingReq) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setReviewingReq(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [reviewingReq]);
+
   const load = async () => {
     if (!school) return;
-    setLoading(true);
     try {
       // 1. Load pending Teacher Admin requests
       const reqs = await listRequests({
@@ -45,7 +55,7 @@ export default function AdminTeacherAdmins() {
         setTeacherAdmins([
           {
             id: "usr-3",
-            email: "teacheradmin@royalschool.edu",
+            email: "teacheradmin@school.edu",
             full_name: "Royal Teacher Admin",
             role: "teacher_admin",
             status: "active",
@@ -94,7 +104,6 @@ export default function AdminTeacherAdmins() {
   };
 
   useEffect(() => {
-    // load() is async and only sets state after awaiting — not a synchronous render cascade.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -157,42 +166,42 @@ export default function AdminTeacherAdmins() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight">Teacher Admin Management</h1>
-        <p className="text-sm text-fg/60">
-          Manage teacher administrative elevations, review requests, and configure granular privileges
-        </p>
-      </div>
+      <PageHeader
+        title="Teacher Admin Delegation"
+        subtitle={`Configure delegated administrative capabilities, review elevation petitions, and manage granular privilege boundaries at ${school?.name || "your school"}.`}
+      />
 
       {/* Pending Teacher Admin Requests */}
-      <div className="card p-5 border border-fg/10">
-        <h2 className="font-bold text-base text-fg flex items-center gap-2 mb-3">
-          <span>📬 Pending Elevation Requests</span>
+      <div className="card p-6 border-border">
+        <h2 className="font-bold text-base text-fg flex items-center justify-between mb-4 pb-3 border-b border-border/60">
+          <span>Pending Elevation Requests</span>
           {requests.length > 0 && (
-            <span className="badge bg-amber-100 text-amber-800 text-xs">
+            <span className="badge bg-amber-50 text-amber-800 border-amber-200 text-xs">
               {requests.length} pending
             </span>
           )}
         </h2>
 
         {requests.length === 0 ? (
-          <p className="text-xs text-fg/50 py-3">No pending Teacher Admin requests from teachers.</p>
+          <p className="text-xs text-muted py-2 italic">
+            No pending Teacher Admin requests from faculty at this time.
+          </p>
         ) : (
-          <div className="divide-y divide-fg/5">
+          <div className="divide-y divide-border/60">
             {requests.map((r) => (
-              <div key={r.id} className="py-3 flex items-start justify-between gap-4">
+              <div key={r.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm text-fg">{r.teacher_name}</span>
-                    <span className="text-xs text-fg/50 font-mono">({r.teacher_email})</span>
+                    <span className="font-bold text-sm text-fg">{r.teacher_name}</span>
+                    <span className="text-xs text-muted font-mono">({r.teacher_email})</span>
                   </div>
-                  <p className="text-xs text-fg/70 mt-1">
+                  <p className="text-xs text-muted mt-1">
                     <strong className="text-fg">Reason:</strong> {r.details?.reason || r.title}
                   </p>
                   {r.details?.requested_permissions && (
-                    <div className="flex flex-wrap gap-1 mt-1.5">
+                    <div className="flex flex-wrap gap-1.5 mt-2">
                       {r.details.requested_permissions.map((p: string) => (
-                        <span key={p} className="badge bg-surface text-fg/70 text-[10px]">
+                        <span key={p} className="badge bg-surface text-muted border border-border text-[10px]">
                           {p}
                         </span>
                       ))}
@@ -202,7 +211,7 @@ export default function AdminTeacherAdmins() {
 
                 <button
                   onClick={() => setReviewingReq(r)}
-                  className="btn-primary text-xs px-3 py-1.5 whitespace-nowrap"
+                  className="btn-primary btn-sm text-xs whitespace-nowrap self-start sm:self-center"
                 >
                   Review Request →
                 </button>
@@ -213,10 +222,12 @@ export default function AdminTeacherAdmins() {
       </div>
 
       {/* Active Teacher Admins Table */}
-      <div className="card overflow-hidden">
-        <div className="p-4 border-b border-fg/5 flex items-center justify-between">
-          <h2 className="font-bold text-base text-fg">Active Teacher Admins ({teacherAdmins.length})</h2>
-          <span className="text-xs text-fg/50">Granular permissions configured below</span>
+      <div className="card overflow-hidden border-border">
+        <div className="p-5 border-b border-border/60 flex items-center justify-between bg-surface/40">
+          <div>
+            <h2 className="font-bold text-base text-fg">Active Teacher Admins ({teacherAdmins.length})</h2>
+            <p className="text-xs text-muted mt-0.5">Toggle specific administrative capabilities granted to each elevated teacher.</p>
+          </div>
         </div>
 
         {loading ? (
@@ -224,54 +235,57 @@ export default function AdminTeacherAdmins() {
             <Spinner label="Loading Teacher Admins…" />
           </div>
         ) : teacherAdmins.length === 0 ? (
-          <div className="p-12 text-center text-sm text-fg/50">
-            No teachers currently hold the Teacher Admin role.
-          </div>
+          <EmptyState
+            title="No teachers currently designated as Teacher Admin"
+            hint="Approved elevation requests promote teachers to Teacher Admin with granular toggles below."
+          />
         ) : (
-          <div className="divide-y divide-fg/5">
+          <div className="divide-y divide-border/60">
             {teacherAdmins.map((ta) => {
               const activePerms = permissionsMap[ta.id] || [];
               return (
-                <div key={ta.id} className="p-5 space-y-3">
-                  <div className="flex items-start justify-between gap-2">
+                <div key={ta.id} className="p-6 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-base text-fg">{ta.full_name}</span>
                         <StatusBadge status="active" />
-                        <span className="badge bg-purple-50 text-purple-700 font-semibold text-[10px]">
+                        <span className="badge bg-purple-50 text-purple-700 border-purple-200 font-bold text-[10px]">
                           TEACHER ADMIN
                         </span>
                       </div>
-                      <p className="text-xs text-fg/60 font-mono mt-0.5">{ta.email} · {ta.department}</p>
+                      <p className="text-xs text-muted font-mono mt-0.5">
+                        {ta.email} · {ta.department || "General Faculty"}
+                      </p>
                     </div>
                   </div>
 
                   {/* Granular Permission Toggles */}
-                  <div className="bg-surface/50 rounded-xl p-3 border border-fg/5">
-                    <span className="text-xs font-semibold text-fg/80 block mb-2">
+                  <div className="bg-surface/50 rounded-2xl p-4 border border-border">
+                    <span className="text-xs font-bold text-fg uppercase tracking-wider block mb-2.5">
                       Granted Administrative Privileges:
                     </span>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                       {AVAILABLE_PERMS.map((perm) => {
                         const isGranted = activePerms.includes(perm.code);
                         return (
                           <label
                             key={perm.code}
-                            className={`flex items-start gap-2 p-2 rounded-lg border text-xs cursor-pointer transition ${
+                            className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition-all ${
                               isGranted
-                                ? "bg-accent-soft/40 border-accent/30 text-fg"
-                                : "bg-bg border-fg/10 text-fg/60 hover:bg-surface"
+                                ? "bg-accent-soft/70 border-accent/40 text-fg shadow-xs"
+                                : "bg-card border-border text-muted hover:bg-surface hover:text-fg"
                             }`}
                           >
                             <input
                               type="checkbox"
                               checked={isGranted}
                               onChange={() => handleTogglePermission(ta.id, perm.code)}
-                              className="mt-0.5 rounded border-fg/20 text-accent focus:ring-accent"
+                              className="mt-0.5 rounded border-border text-accent focus:ring-accent"
                             />
                             <div>
-                              <span className="font-semibold block">{perm.name}</span>
-                              <span className="text-[10px] text-fg/50 leading-tight block">
+                              <span className="font-bold text-fg block">{perm.name}</span>
+                              <span className="text-[11px] text-muted leading-relaxed block mt-0.5">
                                 {perm.desc}
                               </span>
                             </div>
@@ -289,30 +303,57 @@ export default function AdminTeacherAdmins() {
 
       {/* Review Modal */}
       {reviewingReq && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="card w-full max-w-md p-6 bg-bg shadow-2xl relative">
-            <h3 className="font-bold text-lg text-fg mb-1">Review Teacher Admin Request</h3>
-            <p className="text-xs text-fg/60 mb-4">
-              Submitted by <span className="font-semibold text-fg">{reviewingReq.teacher_name}</span>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in-up"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="teacher-admin-modal-title"
+          onClick={() => setReviewingReq(null)}
+        >
+          <div
+            className="card w-full max-w-md p-6 bg-card border border-border shadow-card-elevated relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h3 id="teacher-admin-modal-title" className="font-bold text-lg text-fg">
+                Review Elevation Request
+              </h3>
+              <button
+                type="button"
+                onClick={() => setReviewingReq(null)}
+                className="btn-outline text-xs px-2.5 py-1 font-semibold"
+                aria-label="Close dialog"
+              >
+                Close
+              </button>
+            </div>
+            <p className="text-xs text-muted mb-4">
+              Submitted by <strong className="text-fg">{reviewingReq.teacher_name}</strong>
             </p>
 
-            <div className="bg-surface/70 rounded-lg p-3 text-xs text-fg/80 mb-4 space-y-1">
-              <p><strong>Reason:</strong> {reviewingReq.details?.reason || reviewingReq.title}</p>
-              <p><strong>Department:</strong> {reviewingReq.teacher_department || "General"}</p>
+            <div className="bg-surface rounded-xl p-3.5 text-xs text-fg mb-4 space-y-1.5 border border-border">
+              <p>
+                <strong className="text-muted">Reason:</strong>{" "}
+                {reviewingReq.details?.reason || reviewingReq.title}
+              </p>
+              <p>
+                <strong className="text-muted">Department:</strong>{" "}
+                {reviewingReq.teacher_department || "General"}
+              </p>
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-medium text-fg mb-1">Review Notes / Conditions</label>
+              <label className="label">Adjudication Notes / Delegation Conditions</label>
               <textarea
                 rows={3}
                 placeholder="e.g. Approved for managing Grade 2 Science materials and reviewing schedule requests."
                 value={reviewNotes}
                 onChange={(e) => setReviewNotes(e.target.value)}
-                className="w-full rounded-lg border border-fg/15 bg-surface px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
+                className="input py-2 text-xs"
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-border">
               <button
                 onClick={() => setReviewingReq(null)}
                 className="btn-outline text-xs"
@@ -321,7 +362,7 @@ export default function AdminTeacherAdmins() {
               </button>
               <button
                 onClick={() => handleReview("rejected")}
-                className="btn-outline text-xs text-danger border-danger/30 hover:bg-red-50"
+                className="btn-danger text-xs"
               >
                 Reject Request
               </button>
@@ -329,7 +370,7 @@ export default function AdminTeacherAdmins() {
                 onClick={() => handleReview("approved")}
                 className="btn-primary text-xs"
               >
-                Approve & Grant Role
+                Approve & Grant Elevation
               </button>
             </div>
           </div>

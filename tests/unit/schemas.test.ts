@@ -167,5 +167,14 @@ describe("Multi-tenant schemas & validators", () => {
     const duplicateCsv = `Email,Full Name\nteacher1@royal.edu,Asha Patel\nteacher1@royal.edu,Duplicate Asha`;
     const dupRes = await validateTeacherImportCSV(duplicateCsv);
     expect(dupRes.duplicates.length).toBeGreaterThan(0);
+
+    const userPastedCsv = `Email,Full Name,Department,Phone arun.kumar@example.com,Arun Kumar,Science,9876543210 priya.sharma@example.com,Priya Sharma,Languages,9876543211 rahul.verma@example.com,Rahul Verma,Science,9876543212 sneha.reddy@example.com,Sneha Reddy,Science,9876543213 vijay.rao@example.com,Vijay Rao,Computer Studies,9876543214 ananya.iyer@example.com,Ananya Iyer,Science,9876543215 karthik.menon@example.com,Karthik Menon,Social Studies,9876543216 meera.patel@example.com,Meera Patel,Social Studies,9876543217`;
+    const userRes = await validateTeacherImportCSV(userPastedCsv);
+    expect(userRes.validRows).toHaveLength(8);
+    expect(userRes.invalidRows).toHaveLength(0);
+    expect(userRes.validRows[0].email).toBe("arun.kumar@example.com");
+    expect(userRes.validRows[0].fullName).toBe("Arun Kumar");
+    expect(userRes.validRows[0].department).toBe("Science");
+    expect(userRes.validRows[0].phone).toBe("9876543210");
   });
 });

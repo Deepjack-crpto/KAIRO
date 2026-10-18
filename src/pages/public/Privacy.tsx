@@ -1,37 +1,84 @@
+import { Link } from "react-router-dom";
+import { useTenant } from "@/lib/tenant";
+
 export default function Privacy() {
+  const { school } = useTenant();
+
   return (
-    <article className="mx-auto max-w-3xl px-4 py-16 prose-sm">
-      <h1 className="text-3xl font-bold">Privacy Policy</h1>
-      <p className="mt-2 text-sm text-fg/50">Royal School – CBSE · KAIRO</p>
-      <div className="mt-8 space-y-6 text-sm leading-relaxed text-fg/75">
-        <section>
-          <h2 className="text-lg font-semibold text-fg">What we store</h2>
-          <p>KAIRO stores teacher and administrator accounts, the school's approved curriculum
-          materials, and the resources teachers generate (explanations, activities, worksheets,
-          quizzes). Curriculum files are kept in private storage and are never public.</p>
-        </section>
-        <section>
-          <h2 className="text-lg font-semibold text-fg">Who can see what</h2>
-          <p>Teachers can only access materials for the classes and subjects they are assigned, and
-          only their own generated resources and conversations. Administrators manage accounts and
-          curriculum but do not have access to individual teachers' private conversations.</p>
-        </section>
-        <section>
-          <h2 className="text-lg font-semibold text-fg">AI processing</h2>
-          <p>When a teacher asks a question, only the relevant authorized passages are sent to the
-          configured AI provider to produce an answer. We do not use uploaded curriculum to train
-          external models.</p>
-        </section>
-        <section>
-          <h2 className="text-lg font-semibold text-fg">Data retention</h2>
-          <p>Generated resources and conversations are retained so teachers can reopen them, and can
-          be deleted by the owning teacher at any time.</p>
-        </section>
-        <section>
-          <h2 className="text-lg font-semibold text-fg">Contact</h2>
-          <p>Questions? Email <a className="text-accent" href="mailto:contact@royalschool.example">contact@royalschool.example</a>.</p>
-        </section>
+    <div className="mx-auto max-w-4xl px-4 py-16 sm:py-20">
+      <div className="mb-10 border-b border-border/60 pb-6">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="badge bg-emerald-50 text-emerald-800 border-emerald-200 text-xs font-semibold">
+            Data Privacy & Tenant Scoping
+          </span>
+        </div>
+        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-fg">
+          Privacy Policy & Data Isolation
+        </h1>
+        <p className="mt-2 text-sm text-muted">
+          {school ? `${school.name} · KAIRO Multi-Tenant Platform` : "KAIRO Educational Platform Architecture"}
+        </p>
       </div>
-    </article>
+
+      <div className="space-y-6">
+        <div className="card p-6 border-border">
+          <h2 className="text-lg font-bold text-fg mb-2">
+            What We Store
+          </h2>
+          <p className="text-sm text-muted leading-relaxed">
+            KAIRO stores teacher and administrator accounts, the school&apos;s approved curriculum materials, and the educational resources teachers generate (explanations, activities, worksheets, and quizzes). Curriculum files and textbooks are kept strictly in private tenant storage and are never publicly accessible.
+          </p>
+        </div>
+
+        <div className="card p-6 border-border">
+          <h2 className="text-lg font-bold text-fg mb-2">
+            Access Control & Role-Based Boundaries
+          </h2>
+          <p className="text-sm text-muted leading-relaxed">
+            Teachers can only access materials for the specific classes and subjects to which they are assigned by administrators, and can only access their own generated resources and pedagogical conversations. Administrators manage school accounts, timetable, and curriculum files, but do not have access to individual teachers&apos; private pedagogical conversations.
+          </p>
+        </div>
+
+        <div className="card p-6 border-border">
+          <h2 className="text-lg font-bold text-fg mb-2">
+            AI Processing & Curriculum Grounding
+          </h2>
+          <p className="text-sm text-muted leading-relaxed">
+            When a teacher asks an educational question or generates an assessment, only the relevant authorized textbook passages are retrieved from the school&apos;s isolated tenant database and sent to the configured AI provider to produce an answer. Uploaded curriculum materials are never used to train external foundational models.
+          </p>
+        </div>
+
+        <div className="card p-6 border-border">
+          <h2 className="text-lg font-bold text-fg mb-2">
+            Data Retention & Deletion
+          </h2>
+          <p className="text-sm text-muted leading-relaxed">
+            Generated classroom resources and lesson conversations are retained so teachers can reopen, review, or print them at any time. Any resource or history entry can be deleted directly by the owning teacher at their discretion.
+          </p>
+        </div>
+
+        <div className="card p-6 border-border">
+          <h2 className="text-lg font-bold text-fg mb-2">
+            Questions & Contact
+          </h2>
+          <p className="text-sm text-muted leading-relaxed">
+            For questions regarding privacy, data isolation, or account administration, contact the security team at{" "}
+            <a className="text-accent font-semibold hover:underline" href="mailto:contact@kairo.com">
+              contact@kairo.com
+            </a>
+            .
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-10 flex justify-between items-center text-xs text-muted pt-6 border-t border-border">
+        <Link to="/" className="hover:text-accent font-medium">
+          ← Back to KAIRO Home
+        </Link>
+        <Link to="/login" className="btn-primary text-xs py-1.5 px-3">
+          Sign In to Portal
+        </Link>
+      </div>
+    </div>
   );
 }

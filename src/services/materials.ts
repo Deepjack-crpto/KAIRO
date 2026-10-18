@@ -1,6 +1,7 @@
 import { requireSupabase } from "@/lib/supabase";
 import { ALLOWED_MIME, MAX_UPLOAD_BYTES } from "@/lib/schemas";
 import type { Material } from "@/types/db";
+import { recordKairoMove } from "./audit";
 
 export function validateFile(file: File): string | null {
   if (!ALLOWED_MIME.includes(file.type as (typeof ALLOWED_MIME)[number]))
@@ -55,6 +56,12 @@ export async function uploadMaterial(file: File, meta: {
 
   // Trigger async processing (extraction + chunking + embeddings) server-side.
   await sb.functions.invoke("process-document", { body: { materialId: id } }).catch(() => {});
+  recordKairoMove({
+    action: "material.upload",
+    target: meta.title,
+    actorId: uid,
+    meta: { materialId: id, chapter: meta.chapter, classId: meta.classId, byte_size: file.size },
+  });
   return data as Material;
 }
 
@@ -63,18 +70,31 @@ export async function retryProcessing(materialId: string): Promise<void> {
   await sb.from("curriculum_materials").update({ status: "processing", error_message: null }).eq("id", materialId);
   const { error } = await sb.functions.invoke("process-document", { body: { materialId } });
   if (error) throw new Error(error.message);
+  recordKairoMove({
+    action: "material.process",
+    target: materialId,
+    meta: { status: "retrying" },
+  });
 }
 
 export async function setPublished(materialId: string, published: boolean): Promise<void> {
   const { error } = await requireSupabase()
     .from("curriculum_materials").update({ is_published: published }).eq("id", materialId);
   if (error) throw error;
+  recordKairoMove({
+    action: published ? "material.publish" : "material.unpublish",
+    target: materialId,
+  });
 }
 
 export async function archiveMaterial(materialId: string): Promise<void> {
   const { error } = await requireSupabase()
     .from("curriculum_materials").update({ status: "archived", is_published: false }).eq("id", materialId);
   if (error) throw error;
+  recordKairoMove({
+    action: "material.archive",
+    target: materialId,
+  });
 }
 
 /** Signed download URL — authorized by storage RLS, so unauthorized files 403. */

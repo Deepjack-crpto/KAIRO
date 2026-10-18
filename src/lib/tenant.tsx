@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
 import type { School } from "@/types/db";
 import { supabase } from "./supabase";
+import SchoolNotFound from "@/pages/public/SchoolNotFound";
 
 /**
  * Resolved tenant metadata from hostname / environment.
@@ -57,41 +58,64 @@ export const DEFAULT_SCHOOLS: Record<string, School> = {
  * Extract subdomain from hostname.
  * Examples:
  *   "royal.kairo.com" -> "royal"
- *   "oxford.kairo.com" -> "oxford"
+ *   "greenfield.kairo.com" -> "greenfield"
  *   "kairo.com" -> null
  *   "www.kairo.com" -> null
  *   "royal.localhost" -> "royal"
- *   "localhost" -> null (unless dev override stored/query)
+ *   "localhost" -> null (unless in local dev mode)
  */
 export function extractSubdomain(hostname: string): string | null {
-  const host = hostname.toLowerCase().split(":")[0];
+  const host = hostname.toLowerCase().split(":")[0].trim();
 
-  // Specific check for *.localhost
+  // Localhost subdomains (e.g., royal.localhost)
   if (host.endsWith(".localhost")) {
     const parts = host.split(".");
     if (parts.length >= 2 && parts[0] !== "www") {
       return parts[0];
     }
+    return null;
   }
 
-  // Check for *.kairo.com or multi-part domain
+  // Pure IP addresses are not subdomains
+  const isIpv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(host);
+  if (isIpv4) {
+    return null;
+  }
+
+  // Reserved platform subdomains
+  const reservedPrefixes = new Set([
+    "www", "app", "api", "admin", "platform", "console", "status", "mail", "auth"
+  ]);
+
+  // Production or custom multi-part domains (*.kairo.com, *.kairo.in, etc.)
   const parts = host.split(".");
   if (parts.length >= 3) {
+    // If hosted on vercel preview e.g. project-git-branch.vercel.app
+    if (host.endsWith(".vercel.app") && parts.length === 3) {
+      // Standard vercel project root (e.g., kairo.vercel.app)
+      return null;
+    }
+
     const sub = parts[0];
-    if (sub !== "www" && sub !== "app") {
+    if (!reservedPrefixes.has(sub)) {
       return sub;
     }
   }
 
-  // Development query override e.g. ?school=royal or ?subdomain=royal
-  if (typeof window !== "undefined") {
+  // In local development ONLY (localhost or 127.0.0.1 or dev mode),
+  // allow query param (?school=slug or ?subdomain=slug) or session storage for manual testing.
+  // In production, query parameter overrides MUST be ignored to prevent cross-tenant parameter tampering.
+  const isLocalDev =
+    typeof window !== "undefined" &&
+    (host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost") || !import.meta.env.PROD);
+
+  if (isLocalDev && typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);
     const paramSub = params.get("school") || params.get("subdomain");
-    if (paramSub) return paramSub.toLowerCase();
+    if (paramSub) return paramSub.toLowerCase().trim();
 
-    // Session dev override
     const stored = sessionStorage.getItem("kairo_dev_subdomain");
-    if (stored) return stored;
+    if (stored) return stored.toLowerCase().trim();
   }
 
   return null;
@@ -111,6 +135,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const fetchSchool = async (slug: string | null) => {
     if (!slug) {
       setSchool(null);
+      setError(null);
       setLoading(false);
       return;
     }
@@ -119,15 +144,18 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       setError(null);
 
+      // 1. Query Supabase schools table dynamically by slug or domain
       if (supabase) {
+        const hostname = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "";
         const { data, error: err } = await supabase
           .from("schools")
           .select("*")
-          .eq("slug", slug)
+          .or(`slug.eq.${slug},domain.eq.${hostname}`)
+          .eq("is_active", true)
           .maybeSingle();
 
         if (err) {
-          console.warn("Could not query schools from Supabase, checking fallback:", err);
+          console.warn("Could not query schools from Supabase:", err);
         }
 
         if (data) {
@@ -137,39 +165,26 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Check default fallback
-      if (DEFAULT_SCHOOLS[slug]) {
+      // 2. In local development or mock preview mode only: fallback to default mock schools
+      if (!import.meta.env.PROD && DEFAULT_SCHOOLS[slug]) {
         setSchool(DEFAULT_SCHOOLS[slug]);
-      } else {
-        // Dynamic placeholder for any new slug
-        setSchool({
-          id: `school-${slug}`,
-          name: `${slug.charAt(0).toUpperCase() + slug.slice(1)} School`,
-          slug,
-          domain: `${slug}.kairo.com`,
-          is_active: true,
-          logo_url: null,
-          primary_color: "#4f46e5",
-          secondary_color: "#06b6d4",
-          settings: {
-            ai_enabled: true,
-            face_auth_enabled: true,
-            teacher_admin_enabled: true,
-          },
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
+        setLoading(false);
+        return;
       }
+
+      // 3. School does not exist or is inactive in production
+      setSchool(null);
+      setError("SCHOOL_NOT_FOUND");
     } catch (e) {
-      setError((e as Error).message);
+      console.error("Tenant resolution error:", e);
+      setSchool(null);
+      setError("SCHOOL_NOT_FOUND");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    // fetchSchool() is async and only sets state after awaiting — not a synchronous render cascade.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchSchool(subdomain);
   }, [subdomain]);
 
@@ -193,6 +208,23 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       await fetchSchool(subdomain);
     },
   }), [subdomain, school, loading, error]);
+
+  // Loading state when resolving tenant on a school subdomain
+  if (loading && subdomain) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg text-fg">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          <p className="text-xs text-muted font-medium">Resolving school tenant...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle unregistered or unknown school subdomains with dedicated error page
+  if (!loading && subdomain && error === "SCHOOL_NOT_FOUND") {
+    return <SchoolNotFound subdomain={subdomain} onReset={() => setDevSubdomain(null)} />;
+  }
 
   return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;
 }

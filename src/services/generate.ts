@@ -2,6 +2,7 @@ import { requireSupabase } from "@/lib/supabase";
 import { activitySchema, worksheetSchema, quizSchema, answerSchema } from "@/lib/schemas";
 import type { Activity, Worksheet, Quiz, AiAnswer } from "@/lib/schemas";
 import type { HistoryRow } from "@/types/db";
+import { recordKairoMove } from "./audit";
 
 /**
  * All generation goes through the `ai-generate` Edge Function, which enforces
@@ -19,6 +20,11 @@ async function invokeAi<T>(kind: string, body: Record<string, unknown>): Promise
 export async function askQuestion(materialId: string, question: string, sessionId?: string): Promise<AiAnswer & { sessionId: string }> {
   const res = await invokeAi<any>("answer", { materialId, question, sessionId });
   const parsed = answerSchema.parse(res.answer);
+  recordKairoMove({
+    action: "ai.assistant.query",
+    target: materialId,
+    meta: { questionLength: question.length, sessionId: res.sessionId },
+  });
   return { ...parsed, sessionId: res.sessionId };
 }
 
@@ -47,6 +53,12 @@ export async function saveActivity(a: Activity, materialId: string | null): Prom
   }).select("id").single();
   if (error) throw error;
   await recordHistory("activity", data.id, materialId, a.title, `${a.activityType} • Grade ${a.grade}`, a);
+  recordKairoMove({
+    action: "ai.generate.activity",
+    target: a.title,
+    actorId: uid,
+    meta: { activityId: data.id, grade: a.grade, subject: a.subject, activityType: a.activityType },
+  });
   return data.id;
 }
 
@@ -59,6 +71,12 @@ export async function saveWorksheet(w: Worksheet, materialId: string | null): Pr
   }).select("id").single();
   if (error) throw error;
   await recordHistory("worksheet", data.id, materialId, w.title, `${w.questions.length} questions`, w);
+  recordKairoMove({
+    action: "ai.generate.worksheet",
+    target: w.title,
+    actorId: uid,
+    meta: { worksheetId: data.id, grade: w.grade, subject: w.subject, questions: w.questions.length },
+  });
   return data.id;
 }
 
@@ -71,6 +89,12 @@ export async function saveQuiz(q: Quiz, materialId: string | null): Promise<stri
   }).select("id").single();
   if (error) throw error;
   await recordHistory("quiz", data.id, materialId, q.title, `${q.questions.length} questions`, q);
+  recordKairoMove({
+    action: "ai.generate.quiz",
+    target: q.title,
+    actorId: uid,
+    meta: { quizId: data.id, grade: q.grade, subject: q.subject, questions: q.questions.length },
+  });
   return data.id;
 }
 

@@ -14,8 +14,11 @@ import TeacherLogin from "@/pages/public/TeacherLogin";
 import NotFound from "@/pages/public/NotFound";
 
 import SuperSchools from "@/pages/super/Schools";
+import SuperSchoolDetail from "@/pages/super/SchoolDetail";
 import SuperUsers from "@/pages/super/Users";
 import SuperAudit from "@/pages/super/Audit";
+import SuperOverview from "@/pages/super/Overview";
+import SuperSettings from "@/pages/super/Settings";
 
 import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminTeachers from "@/pages/admin/Teachers";
@@ -69,9 +72,12 @@ export const router = createBrowserRouter([
       </RequireSuperAdmin>
     ),
     children: [
-      { path: "", element: <Navigate to="/super/schools" replace /> },
+      { path: "", element: <Navigate to="/super/overview" replace /> },
+      { path: "overview", element: <SuperOverview /> },
       { path: "schools", element: <SuperSchools /> },
+      { path: "schools/:schoolId", element: <SuperSchoolDetail /> },
       { path: "users", element: <SuperUsers /> },
+      { path: "settings", element: <SuperSettings /> },
       { path: "audit", element: <SuperAudit /> },
     ],
   },

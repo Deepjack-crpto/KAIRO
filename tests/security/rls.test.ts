@@ -256,6 +256,47 @@ describe("Row-Level Security", () => {
     expect(tampered).toHaveLength(0);
   });
 
+  it("audit_logs older than 30 days are automatically deleted by retention cleanup", async () => {
+    // 1. Insert an expired audit log (35 days ago) and a recent one (2 days ago)
+    await h.asService(async () => {
+      await h.db.query(
+        `insert into audit_logs (action, target, created_at)
+         values ('expired.trigger.action', 'old_record', now() - interval '35 days'),
+                ('recent.action', 'new_record', now() - interval '2 days')`
+      );
+    });
+
+    // Verify automatic trigger immediately cleaned up the row older than 30 days
+    const expiredByTrigger = await h.asServiceQuery(
+      `select id from audit_logs where action = 'expired.trigger.action'`
+    );
+    expect(expiredByTrigger).toHaveLength(0);
+
+    const recent = await h.asServiceQuery(
+      `select id from audit_logs where action = 'recent.action'`
+    );
+    expect(recent.length).toBeGreaterThan(0);
+
+    // 2. Test manual invocation of cleanup_expired_audit_logs() by updating a row's age
+    await h.asService(async () => {
+      await h.db.query(
+        `update audit_logs set created_at = now() - interval '40 days' where id = $1`,
+        [recent[0].id]
+      );
+    });
+
+    const deleted = await h.asServiceQuery<{ count: number }>(
+      `select cleanup_expired_audit_logs() as count`
+    );
+    expect(Number(deleted[0].count)).toBeGreaterThanOrEqual(1);
+
+    const expiredAfterManual = await h.asServiceQuery(
+      `select id from audit_logs where id = $1`,
+      [recent[0].id]
+    );
+    expect(expiredAfterManual).toHaveLength(0);
+  });
+
   it("only admins may write reference data (classes/subjects)", async () => {
     await expect(
       h.actAs(teacherA, () =>

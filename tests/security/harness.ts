@@ -53,6 +53,8 @@ export async function bootDb() {
   await db.exec(mig("0009_multi_tenant_schema.sql"));
   await db.exec(mig("0010_multi_tenant_rls.sql"));
   await db.exec(mig("0011_seed_tenants.sql"));
+  await db.exec(mig("0012_user_provisioning.sql"));
+  await db.exec(mig("0013_audit_log_retention.sql"));
 
   // storage.objects needs select grant + the authorization helper in scope.
   await db.exec(`

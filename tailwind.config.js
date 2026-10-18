@@ -4,22 +4,43 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: "#FBFAF8",
-        fg: "#383D4E",
-        surface: "#F0EDE8",
+        bg: "#FFFFFF",
+        fg: "#111827",
+        surface: "#F8FAFC",
+        "surface-hover": "#F1F5F9",
         card: "#FFFFFF",
+        border: "#E5E7EB",
+        muted: "#4B5563",
         accent: {
-          DEFAULT: "#B21E3B",
-          hover: "#981730",
-          soft: "#F7E7EB",
+          DEFAULT: "#2563EB",
+          hover: "#1D4ED8",
+          soft: "#EFF6FF",
+          border: "#BFDBFE",
+        },
+        secondary: {
+          DEFAULT: "#0D9488",
+          hover: "#0F766E",
+          soft: "#F0FDFA",
+        },
+        danger: {
+          DEFAULT: "#E11D48",
+          hover: "#BE123C",
+          soft: "#FFF1F2",
         },
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
       },
-      borderRadius: { xl: "0.875rem", "2xl": "1.25rem" },
+      borderRadius: {
+        xl: "0.75rem",
+        "2xl": "1rem",
+        "3xl": "1.5rem",
+      },
       boxShadow: {
-        card: "0 1px 2px rgba(56,61,78,0.04), 0 4px 16px rgba(56,61,78,0.06)",
+        xs: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+        card: "0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04)",
+        "card-hover": "0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 4px 6px -4px rgba(0, 0, 0, 0.04)",
+        "card-elevated": "0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04)",
       },
     },
   },

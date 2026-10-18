@@ -25,7 +25,13 @@ export async function validateTeacherImportCSV(
   csvText: string,
   existingEmails: string[] = []
 ): Promise<ImportValidationResult> {
-  const lines = csvText
+  let normalized = csvText.trim();
+  // If the CSV string was pasted on a single line without newlines, recover row boundaries before each email
+  if (!normalized.includes("\n") && !normalized.includes("\r")) {
+    normalized = normalized.replace(/\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, "\n$1");
+  }
+
+  const lines = normalized
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
@@ -108,6 +114,7 @@ export async function executeTeacherImport(opts: {
   schoolId: string;
   actorsId: string;
   teachers: ImportTeacherRow[];
+  defaultPassword?: string;
 }): Promise<{ created: number; errors: string[] }> {
   const errors: string[] = [];
   let created = 0;
@@ -128,6 +135,7 @@ export async function executeTeacherImport(opts: {
           fullName: t.fullName,
           department: t.department,
           schoolId: opts.schoolId,
+          password: opts.defaultPassword,
         },
       });
 

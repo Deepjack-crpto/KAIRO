@@ -21,7 +21,7 @@ let localRequests: TeacherRequest[] = [
     created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
     updated_at: new Date(Date.now() - 3600000 * 4).toISOString(),
     teacher_name: "Dev Teacher",
-    teacher_email: "teacher@royalschool.edu",
+    teacher_email: "teacher@school.edu",
     teacher_department: "Science",
   },
   {
@@ -45,7 +45,7 @@ let localRequests: TeacherRequest[] = [
     created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
     updated_at: new Date(Date.now() - 3600000 * 2).toISOString(),
     teacher_name: "Dev Teacher",
-    teacher_email: "teacher@royalschool.edu",
+    teacher_email: "teacher@school.edu",
     teacher_department: "Science",
   },
 ];

@@ -3,8 +3,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 // Only browser-safe keys are read here. The service-role key and AI provider
 // secrets live exclusively in Edge Function secrets and are never imported into
 // the client bundle.
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const url = (import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL) as string | undefined;
+const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) as string | undefined;
 
 /** True when the client is configured to talk to a real Supabase project. */
 export const isSupabaseConfigured = Boolean(url && anonKey);

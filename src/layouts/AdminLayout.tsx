@@ -6,36 +6,36 @@ export default function AdminLayout() {
   const isSuper = profile?.role === "super_admin";
 
   const groups: NavGroup[] = [
-    { heading: "Overview", items: [{ to: "/admin/dashboard", label: "Dashboard", icon: "▦" }] },
+    { heading: "Overview", items: [{ to: "/admin/dashboard", label: "Dashboard" }] },
     {
       heading: "People",
       items: [
-        { to: "/admin/teachers", label: "Teachers", icon: "☺" },
-        { to: "/admin/teacher-admins", label: "Teacher Admins", icon: "⭐" },
-        ...(isSuper ? [{ to: "/admin/administrators", label: "Administrators", icon: "♛" }] : []),
+        { to: "/admin/teachers", label: "Teachers" },
+        { to: "/admin/teacher-admins", label: "Teacher Admins" },
+        ...(isSuper ? [{ to: "/admin/administrators", label: "Administrators" }] : []),
       ],
     },
     {
       heading: "Academics",
       items: [
-        { to: "/admin/classes", label: "Classes", icon: "▤" },
-        { to: "/admin/assignments", label: "Assignments", icon: "⇄" },
-        { to: "/admin/materials", label: "Curriculum", icon: "▣" },
-        { to: "/admin/timetable", label: "Timetable", icon: "📅" },
+        { to: "/admin/classes", label: "Classes" },
+        { to: "/admin/assignments", label: "Assignments" },
+        { to: "/admin/materials", label: "Curriculum" },
+        { to: "/admin/timetable", label: "Timetable" },
       ],
     },
     {
       heading: "Communication & Workflow",
       items: [
-        { to: "/admin/announcements", label: "Announcements", icon: "📢" },
-        { to: "/admin/requests", label: "Teacher Requests", icon: "📬" },
+        { to: "/admin/announcements", label: "Announcements" },
+        { to: "/admin/requests", label: "Teacher Requests" },
       ],
     },
     {
       heading: "System & Governance",
       items: [
-        { to: "/admin/audit", label: "Audit Logs", icon: "📜" },
-        { to: "/admin/settings", label: "Settings", icon: "⚙" },
+        { to: "/admin/audit", label: "Audit Logs" },
+        { to: "/admin/settings", label: "Settings" },
       ],
     },
   ];

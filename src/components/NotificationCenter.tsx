@@ -60,12 +60,12 @@ export function NotificationCenter() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="relative p-2 rounded-lg hover:bg-surface text-fg/75 hover:text-fg transition focus:outline-none"
+        className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-surface/70 hover:bg-surface text-fg/80 hover:text-fg text-xs font-semibold transition focus:outline-none"
         aria-label="View notifications"
       >
-        <span className="text-lg">🔔</span>
+        <span>Alerts</span>
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white animate-pulse">
+          <span className="flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -97,8 +97,8 @@ export function NotificationCenter() {
               <div className="p-4 text-center text-xs text-fg/50">Loading notifications…</div>
             ) : notifications.length === 0 ? (
               <div className="p-8 text-center text-sm text-fg/50">
-                <span className="text-2xl block mb-1">🎉</span>
-                No notifications right now
+                <p className="font-medium text-fg/80 text-xs uppercase tracking-wider mb-1">All Caught Up</p>
+                <p className="text-xs text-muted">No notifications right now</p>
               </div>
             ) : (
               notifications.map((n) => (

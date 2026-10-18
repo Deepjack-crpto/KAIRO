@@ -14,7 +14,7 @@ function FullPageSpinner() {
 
 /** Where a given role's home dashboard lives. */
 export function homeFor(role: Role): string {
-  if (role === "super_admin") return "/super/schools";
+  if (role === "super_admin") return "/super/overview";
   if (role === "admin" || role === "principal") return "/admin/dashboard";
   return "/teacher/dashboard";
 }
@@ -44,7 +44,9 @@ export function RequireRole({ role, children }: { role: Role; children: React.Re
     return (
       <div className="flex min-h-screen items-center justify-center p-4 text-center">
         <div className="card max-w-md p-6">
-          <div className="mb-3 text-3xl">⛔</div>
+          <div className="mb-3 inline-flex items-center justify-center px-3 py-1 rounded-full bg-rose-100 text-rose-800 text-xs font-bold uppercase tracking-wider">
+            Access Blocked
+          </div>
           <h2 className="text-xl font-bold text-danger">Tenant Isolation Violation</h2>
           <p className="mt-2 text-sm text-fg/70">
             Your account is assigned to another school tenant. Access to {school.name} is strictly prohibited by Kairo security policy.
@@ -99,7 +101,9 @@ export function RequirePermission({
     if (fallback) return <>{fallback}</>;
     return (
       <div className="card p-8 text-center">
-        <div className="text-3xl mb-2">🔒</div>
+        <div className="mb-3 inline-flex items-center justify-center px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold uppercase tracking-wider">
+          Permission Restricted
+        </div>
         <h3 className="font-semibold text-fg">Permission Required</h3>
         <p className="text-sm text-fg/60 mt-1">
           You need the <code className="text-xs bg-surface px-1 py-0.5 rounded">{permission}</code> privilege to perform this action.

@@ -1,5 +1,6 @@
 import { requireSupabase } from "@/lib/supabase";
-import type { AuditLog } from "@/types/db";
+import type { AuditLog, Role, Profile } from "@/types/db";
+import { getRetentionCutoffDate } from "./audit";
 
 /**
  * Admin-only server operations go through the `admin` Edge Function, which runs
@@ -14,8 +15,12 @@ async function invokeAdmin<T>(action: string, payload: Record<string, unknown>):
   return data as T;
 }
 
-export const inviteTeacher = (email: string, fullName: string) =>
-  invokeAdmin<{ ok: true; invited: string }>("invite_teacher", { email, fullName });
+export const inviteTeacher = (
+  email: string,
+  fullName: string,
+  opts?: { schoolId?: string; password?: string; department?: string }
+) =>
+  invokeAdmin<{ ok: true; invited: string }>("invite_teacher", { email, fullName, ...opts });
 
 export const resendInvite = (email: string) =>
   invokeAdmin<{ ok: true }>("resend_invite", { email });
@@ -41,14 +46,130 @@ export const setUserStatus = (
 /** Promote/demote an account. Super admin only. */
 export const setUserRole = (
   userId: string,
-  role: "super_admin" | "admin" | "teacher",
+  role: Role,
 ) => invokeAdmin<{ ok: true }>("set_role", { userId, role });
 
-export async function listAudit(limit = 50): Promise<AuditLog[]> {
-  const { data, error } = await requireSupabase()
-    .from("audit_logs").select("*").order("created_at", { ascending: false }).limit(limit);
-  if (error) throw error;
-  return data as AuditLog[];
+/** Update permitted user attributes with audit logging */
+export async function updateUserProfile(
+  userId: string,
+  updates: Partial<Pick<Profile, "full_name" | "phone" | "address" | "department" | "school_id">>
+): Promise<Profile> {
+  const sb = requireSupabase();
+  const { data, error } = await sb
+    .from("profiles")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", userId)
+    .select("*")
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  const { data: user } = await sb.auth.getUser();
+  if (user?.user?.id) {
+    try {
+      await sb.from("audit_logs").insert({
+        actor_id: user.user.id,
+        action: "user.update",
+        target: userId,
+        school_id: data.school_id || user.user.user_metadata?.school_id || null,
+        meta: { updated_fields: Object.keys(updates) },
+      });
+    } catch {
+      // audit logging is non-blocking
+    }
+  }
+
+  return data as Profile;
+}
+
+/** Create/Provision user across tenants securely via the admin Edge Function. */
+export async function createGlobalUser(payload: {
+  email: string;
+  fullName: string;
+  role: Role;
+  schoolId: string | null;
+  department?: string;
+  phone?: string;
+  password?: string;
+}): Promise<Profile> {
+  const email = payload.email.trim().toLowerCase();
+  const fullName = payload.fullName.trim();
+
+  // If in dev preview mode (VITE_DEV_AUTH=1) without backend, return mock profile
+  if (import.meta.env.VITE_DEV_AUTH === "1") {
+    return {
+      id: `dev-${payload.role}-${Date.now()}`,
+      email,
+      full_name: fullName,
+      role: payload.role,
+      status: "active",
+      school_id: payload.role === "super_admin" ? null : payload.schoolId,
+      phone: payload.phone || "",
+      address: "",
+      avatar_url: "",
+      degree: "",
+      degree_certificate_url: "",
+      department: payload.department || "General",
+      joining_date: new Date().toISOString().split("T")[0],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
+
+  // Secure server-side provisioning via Edge Function running with service role
+  const res = await invokeAdmin<{ ok: true; user: Profile }>("create_user", {
+    email,
+    fullName,
+    role: payload.role,
+    schoolId: payload.role === "super_admin" ? null : payload.schoolId,
+    department: payload.department || "General",
+    phone: payload.phone || "",
+    password: payload.password,
+  });
+
+  return res.user;
+}
+
+export async function listAudit(limit = 50, schoolId?: string | null): Promise<AuditLog[]> {
+  const sb = requireSupabase();
+  const retentionCutoff = getRetentionCutoffDate();
+  let query = sb
+    .from("audit_logs")
+    .select(`
+      *,
+      profiles:actor_id (full_name, role)
+    `)
+    .gte("created_at", retentionCutoff)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (schoolId) {
+    query = query.eq("school_id", schoolId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    let fallback = sb
+      .from("audit_logs")
+      .select("*")
+      .gte("created_at", retentionCutoff)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (schoolId) {
+      fallback = fallback.eq("school_id", schoolId);
+    }
+
+    const { data: fbData, error: fbErr } = await fallback;
+    if (fbErr) throw fbErr;
+    return (fbData || []) as AuditLog[];
+  }
+
+  return (data || []).map((r: any) => ({
+    ...r,
+    actor_name: r.profiles?.full_name || r.actor_name || "System",
+    actor_role: r.profiles?.role || r.actor_role || "SYSTEM",
+  })) as AuditLog[];
 }
 
 export interface AdminMetrics {
@@ -59,10 +180,13 @@ export interface AdminMetrics {
 }
 
 /** Real DB-backed dashboard counts (no hardcoded metrics). */
-export async function adminMetrics(): Promise<AdminMetrics> {
+export async function adminMetrics(schoolId?: string | null): Promise<AdminMetrics> {
   const sb = requireSupabase();
   const count = async (table: string, filter?: (q: any) => any) => {
     let q = sb.from(table).select("*", { count: "exact", head: true });
+    if (schoolId && ["profiles", "classes", "curriculum_materials", "activities", "worksheets", "quizzes"].includes(table)) {
+      q = q.eq("school_id", schoolId);
+    }
     if (filter) q = filter(q);
     const { count: c, error } = await q;
     if (error) throw error;

@@ -174,7 +174,7 @@ export default function Profile() {
           {/* Degree Certificate Private Access */}
           <div className="card p-5 space-y-3">
             <h3 className="font-bold text-sm text-fg flex items-center gap-2">
-              <span>📜 Degree Certificate</span>
+              <span>Degree Certificate</span>
               <span className="badge bg-emerald-50 text-emerald-700 text-[10px]">
                 Private Storage
               </span>
@@ -184,8 +184,8 @@ export default function Profile() {
             </p>
 
             <div className="rounded-lg bg-surface/60 p-3 border border-fg/5 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">📄</span>
+              <div className="flex items-center gap-2.5">
+                <span className="badge bg-slate-100 text-slate-700 text-[10px] font-bold uppercase">PDF</span>
                 <div>
                   <span className="font-medium text-fg block">degree_certificate.pdf</span>
                   <span className="text-[10px] text-fg/50">SHA-256 Verified · 1.4 MB</span>
@@ -204,7 +204,7 @@ export default function Profile() {
           <div className="card p-5 space-y-3 border border-accent/20">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-sm text-fg flex items-center gap-1.5">
-                <span>👤 Biometric Face Verification</span>
+                <span>Biometric Face Verification</span>
               </h3>
               <span
                 className={`badge text-[10px] ${
@@ -226,7 +226,7 @@ export default function Profile() {
                 onClick={() => setBiometricModalOpen(true)}
                 className="btn-primary text-xs w-full py-2 flex items-center justify-center gap-1.5"
               >
-                <span>📷 Verify Face Identity Now</span>
+                <span>Verify Face Identity Now</span>
               </button>
 
               {biometricStatus.enrolled && (

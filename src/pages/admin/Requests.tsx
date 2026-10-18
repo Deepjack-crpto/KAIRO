@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useTenant } from "@/lib/tenant";
 import { listRequests, reviewRequest } from "@/services/requests";
-import { useToast, Spinner, StatusBadge } from "@/components/ui";
+import { useToast, Spinner, StatusBadge, EmptyState } from "@/components/ui";
+import { PageHeader } from "@/components/PageHeader";
 import type { TeacherRequest, RequestStatus } from "@/types/db";
 
 export default function AdminRequests() {
@@ -16,9 +17,18 @@ export default function AdminRequests() {
   const [selectedReq, setSelectedReq] = useState<TeacherRequest | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
 
+  // Escape key handler for review modal
+  useEffect(() => {
+    if (!selectedReq) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedReq(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedReq]);
+
   const load = async () => {
     if (!school) return;
-    setLoading(true);
     try {
       const data = await listRequests({
         schoolId: school.id,
@@ -33,7 +43,6 @@ export default function AdminRequests() {
   };
 
   useEffect(() => {
-    // load() is async and only sets state after awaiting — not a synchronous render cascade.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -49,7 +58,7 @@ export default function AdminRequests() {
         reviewNotes,
         schoolId: school.id,
       });
-      toast("success", `Request ${status}.`);
+      toast("success", `Request ${status} successfully.`);
       setSelectedReq(null);
       setReviewNotes("");
       load();
@@ -61,19 +70,17 @@ export default function AdminRequests() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Teacher Requests Review</h1>
-          <p className="text-sm text-fg/60">
-            Review and adjudicate leave requests, extra periods, and schedule adjustments
-          </p>
-        </div>
+        <PageHeader
+          title="Teacher Requests & Approvals"
+          subtitle={`Review and adjudicate faculty leave requests, extra period covers, and administrative delegation at ${school?.name || "your school"}.`}
+        />
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-fg/60">Status:</span>
+        <div className="flex items-center gap-2 mb-6">
+          <span className="text-xs text-muted font-medium">Filter:</span>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="rounded-lg border border-fg/15 bg-surface px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
+            className="input py-1 px-3 text-xs w-auto"
           >
             <option value="all">All Requests</option>
             <option value="pending">Pending</option>
@@ -84,42 +91,47 @@ export default function AdminRequests() {
       </div>
 
       {loading ? (
-        <div className="card p-12 flex justify-center">
+        <div className="card p-12 flex justify-center border-border">
           <Spinner label="Loading requests…" />
         </div>
       ) : requests.length === 0 ? (
-        <div className="card p-12 text-center text-sm text-fg/50">
-          No teacher requests found matching the current filter.
-        </div>
+        <EmptyState
+          title="No teacher requests found"
+          hint={
+            statusFilter !== "all"
+              ? "No requests matching the selected status filter."
+              : "Teacher leave, schedule adjustment, and elevation requests will appear here for review."
+          }
+        />
       ) : (
-        <div className="card overflow-hidden">
+        <div className="card overflow-hidden border-border">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-surface/70 text-fg/60 border-b border-fg/5 uppercase tracking-wider text-[11px]">
+              <thead className="bg-surface text-muted border-b border-border uppercase tracking-wider text-[11px] font-semibold">
                 <tr>
-                  <th className="px-4 py-3">Teacher</th>
+                  <th className="px-4 py-3">Faculty Member</th>
                   <th className="px-4 py-3">Request Type</th>
                   <th className="px-4 py-3">Summary & Details</th>
-                  <th className="px-4 py-3">Date Submitted</th>
+                  <th className="px-4 py-3">Submitted</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-fg/5">
+              <tbody className="divide-y divide-border/60">
                 {requests.map((r) => (
-                  <tr key={r.id} className="hover:bg-surface/40 transition">
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-fg">{r.teacher_name}</div>
-                      <div className="text-[11px] text-fg/50 font-mono">{r.teacher_email}</div>
+                  <tr key={r.id} className="hover:bg-surface/50 transition-colors">
+                    <td className="px-4 py-3.5">
+                      <div className="font-bold text-fg">{r.teacher_name}</div>
+                      <div className="text-[11px] text-muted font-mono">{r.teacher_email}</div>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="badge bg-purple-50 text-purple-700 uppercase font-semibold text-[10px]">
+                    <td className="px-4 py-3.5">
+                      <span className="badge bg-purple-50 text-purple-700 border-purple-200 uppercase font-bold text-[10px]">
                         {r.type.replace("_", " ")}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-fg">{r.title}</div>
-                      <div className="text-fg/60 text-[11px] mt-0.5">
+                    <td className="px-4 py-3.5">
+                      <div className="font-bold text-fg">{r.title}</div>
+                      <div className="text-muted text-[11px] mt-0.5">
                         {r.type === "leave" && (
                           <span>Date: {r.details?.date} · Duration: {r.details?.duration}</span>
                         )}
@@ -127,19 +139,19 @@ export default function AdminRequests() {
                           <span>Requested Period: {r.details?.requested_period}</span>
                         )}
                         {r.details?.reason && (
-                          <span className="block truncate max-w-xs italic text-fg/50">
-                            "{r.details.reason}"
+                          <span className="block truncate max-w-xs italic text-muted mt-0.5">
+                            &quot;{r.details.reason}&quot;
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-fg/60 whitespace-nowrap">
+                    <td className="px-4 py-3.5 text-muted whitespace-nowrap">
                       {new Date(r.created_at).toLocaleDateString([], {
                         month: "short",
                         day: "numeric",
                       })}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       <StatusBadge
                         status={
                           r.status === "approved"
@@ -150,16 +162,16 @@ export default function AdminRequests() {
                         }
                       />
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3.5 text-right">
                       {r.status === "pending" ? (
                         <button
                           onClick={() => setSelectedReq(r)}
-                          className="btn-primary text-[11px] px-3 py-1"
+                          className="btn-primary btn-sm text-[11px]"
                         >
                           Review →
                         </button>
                       ) : (
-                        <span className="text-[11px] text-fg/40">Resolved</span>
+                        <span className="text-[11px] text-muted font-medium">Adjudicated</span>
                       )}
                     </td>
                   </tr>
@@ -172,42 +184,63 @@ export default function AdminRequests() {
 
       {/* Review Modal */}
       {selectedReq && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="card w-full max-w-md p-6 bg-bg shadow-2xl relative">
-            <h3 className="font-bold text-lg text-fg mb-1">Review Request</h3>
-            <p className="text-xs text-fg/60 mb-4">
-              Submitted by <span className="font-semibold text-fg">{selectedReq.teacher_name}</span>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in-up"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="review-modal-title"
+          onClick={() => setSelectedReq(null)}
+        >
+          <div
+            className="card w-full max-w-md p-6 bg-card border border-border shadow-card-elevated relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h3 id="review-modal-title" className="font-bold text-lg text-fg">
+                Review Request
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSelectedReq(null)}
+                className="btn-outline text-xs px-2.5 py-1 font-semibold"
+                aria-label="Close dialog"
+              >
+                Close
+              </button>
+            </div>
+            <p className="text-xs text-muted mb-4">
+              Submitted by <strong className="text-fg">{selectedReq.teacher_name}</strong>
             </p>
 
-            <div className="bg-surface/70 rounded-lg p-3.5 text-xs text-fg/80 mb-4 space-y-2 border border-fg/5">
+            <div className="bg-surface rounded-xl p-4 text-xs text-fg mb-4 space-y-2 border border-border">
               <div className="flex justify-between">
-                <span className="text-fg/50 font-medium">Type:</span>
-                <span className="uppercase font-semibold text-accent">{selectedReq.type}</span>
+                <span className="text-muted font-medium">Category:</span>
+                <span className="uppercase font-bold text-accent">{selectedReq.type}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-fg/50 font-medium">Title:</span>
-                <span className="font-medium text-fg">{selectedReq.title}</span>
+                <span className="text-muted font-medium">Subject:</span>
+                <span className="font-bold text-fg">{selectedReq.title}</span>
               </div>
               <div>
-                <span className="text-fg/50 font-medium block mb-1">Details:</span>
-                <p className="p-2 rounded bg-bg text-fg/90 italic">
+                <span className="text-muted font-medium block mb-1">Teacher Notes:</span>
+                <p className="p-2.5 rounded-lg bg-card border border-border text-fg italic">
                   {selectedReq.details?.reason || JSON.stringify(selectedReq.details)}
                 </p>
               </div>
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-medium text-fg mb-1">Decision Comments / Notes</label>
+              <label className="label">Adjudication Notes (shared with teacher)</label>
               <textarea
                 rows={3}
-                placeholder="Enter feedback for the teacher…"
+                placeholder="Enter feedback or approval conditions…"
                 value={reviewNotes}
                 onChange={(e) => setReviewNotes(e.target.value)}
-                className="w-full rounded-lg border border-fg/15 bg-surface px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
+                className="input py-2 text-xs"
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-border">
               <button
                 onClick={() => setSelectedReq(null)}
                 className="btn-outline text-xs"
@@ -216,7 +249,7 @@ export default function AdminRequests() {
               </button>
               <button
                 onClick={() => handleReview("rejected")}
-                className="btn-outline text-xs text-danger border-danger/30 hover:bg-red-50"
+                className="btn-danger text-xs"
               >
                 Reject Request
               </button>

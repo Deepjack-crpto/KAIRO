@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useTenant } from "@/lib/tenant";
 import {
@@ -6,7 +6,8 @@ import {
   createAnnouncement,
   publishAnnouncement,
 } from "@/services/announcements";
-import { useToast, Spinner, StatusBadge } from "@/components/ui";
+import { useToast, Spinner, StatusBadge, EmptyState, SearchBar } from "@/components/ui";
+import { PageHeader } from "@/components/PageHeader";
 import type { Announcement, AnnouncementAudience } from "@/types/db";
 
 export default function AdminAnnouncements() {
@@ -17,6 +18,7 @@ export default function AdminAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
   // Form state
   const [title, setTitle] = useState("");
@@ -26,9 +28,18 @@ export default function AdminAnnouncements() {
   const [publishImmediately, setPublishImmediately] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  // Escape listener for create modal
+  useEffect(() => {
+    if (!modalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModalOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modalOpen]);
+
   const load = async () => {
     if (!school) return;
-    setLoading(true);
     try {
       const data = await listAnnouncements({ schoolId: school.id });
       setAnnouncements(data);
@@ -40,7 +51,6 @@ export default function AdminAnnouncements() {
   };
 
   useEffect(() => {
-    // load() is async and only sets state after awaiting — not a synchronous render cascade.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -63,7 +73,12 @@ export default function AdminAnnouncements() {
         published_by: profile.id,
       });
 
-      toast("success", publishImmediately ? "Announcement published to teachers." : "Announcement draft saved.");
+      toast(
+        "success",
+        publishImmediately
+          ? "Announcement published to faculty."
+          : "Announcement draft saved."
+      );
       setModalOpen(false);
       setTitle("");
       setContent("");
@@ -86,146 +101,205 @@ export default function AdminAnnouncements() {
     }
   };
 
+  const filteredAnnouncements = useMemo(() => {
+    return announcements.filter((a) => {
+      return (
+        !search ||
+        a.title.toLowerCase().includes(search.toLowerCase()) ||
+        a.content.toLowerCase().includes(search.toLowerCase())
+      );
+    });
+  }, [announcements, search]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Principal Announcements</h1>
-          <p className="text-sm text-fg/60">
-            Publish official communications targeted to teachers and departments
-          </p>
-        </div>
+        <PageHeader
+          title="Principal Bulletins & Announcements"
+          subtitle={`Broadcast official communications to faculty and specific academic departments at ${school?.name || "your school"}.`}
+        />
         <button
           onClick={() => setModalOpen(true)}
-          className="btn-primary text-sm flex items-center gap-2"
+          className="btn-primary text-xs flex items-center gap-2 shrink-0 mb-6"
         >
-          <span>+ New Announcement</span>
+          <span>+ Create Announcement</span>
         </button>
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder="Search announcements…"
+          className="max-w-sm w-full"
+        />
+      </div>
+
       {loading ? (
-        <div className="card p-12 flex justify-center">
-          <Spinner label="Loading school announcements…" />
+        <div className="card p-12 flex justify-center border-border">
+          <Spinner label="Loading announcements…" />
         </div>
-      ) : announcements.length === 0 ? (
-        <div className="card p-12 text-center text-sm text-fg/50">
-          No announcements published yet. Click "New Announcement" to broadcast to teaching staff.
-        </div>
+      ) : !announcements.length ? (
+        <EmptyState
+          title="No announcements published yet"
+          hint="Create an announcement above to communicate school updates or term schedules to teachers."
+          action={
+            <button onClick={() => setModalOpen(true)} className="btn-primary text-xs">
+              Create First Announcement
+            </button>
+          }
+        />
+      ) : !filteredAnnouncements.length ? (
+        <EmptyState
+          title="No matching announcements"
+          hint="Try adjusting your search query."
+          action={
+            <button onClick={() => setSearch("")} className="btn-outline text-xs">
+              Clear Search
+            </button>
+          }
+        />
       ) : (
         <div className="space-y-4">
-          {announcements.map((a) => (
-            <div key={a.id} className="card p-5 space-y-3 hover:border-fg/15 transition">
-              <div className="flex flex-wrap items-start justify-between gap-2">
+          {filteredAnnouncements.map((a) => (
+            <div
+              key={a.id}
+              className="card p-6 border-border hover:border-accent/40 hover:shadow-card-hover transition-all space-y-3"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-base text-fg">{a.title}</h3>
-                    <StatusBadge status={a.is_published ? "ready" : "queued"} />
-                    <span className="badge bg-purple-50 text-purple-700 text-[10px] font-semibold uppercase">
-                      Audience: {a.audience.replace("_", " ")}
-                    </span>
-                  </div>
-                  <span className="text-xs text-fg/50 mt-0.5 block">
+                  <h3 className="font-bold text-base text-fg">{a.title}</h3>
+                  <div className="text-xs text-muted mt-0.5">
                     Published by {a.publisher_name || "Principal"} ·{" "}
                     {new Date(a.created_at).toLocaleDateString([], {
                       month: "short",
                       day: "numeric",
                       year: "numeric",
                     })}
-                  </span>
+                  </div>
                 </div>
 
-                {!a.is_published && (
-                  <button
-                    onClick={() => handlePublish(a.id)}
-                    className="btn-primary text-xs px-3 py-1.5"
-                  >
-                    Publish Now →
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  <span className="badge bg-purple-50 text-purple-700 border-purple-200 text-xs font-semibold">
+                    Audience: {a.audience.replace("_", " ")}
+                  </span>
+                  {a.is_published ? (
+                    <StatusBadge status="active" />
+                  ) : (
+                    <span className="badge bg-slate-100 text-slate-600 border border-slate-200">
+                      Draft
+                    </span>
+                  )}
+                  {!a.is_published && (
+                    <button
+                      onClick={() => handlePublish(a.id)}
+                      className="btn-outline btn-sm text-xs"
+                    >
+                      Publish
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <p className="text-sm text-fg/80 leading-relaxed bg-surface/40 p-4 rounded-xl border border-fg/5">
+              <div className="bg-surface/50 p-4 rounded-xl border border-border/60 text-xs text-fg leading-relaxed whitespace-pre-line">
                 {a.content}
-              </p>
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* New Announcement Modal */}
+      {/* Create Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="card w-full max-w-lg p-6 bg-bg shadow-2xl relative">
-            <h2 className="text-lg font-bold text-fg mb-1">Create School Announcement</h2>
-            <p className="text-xs text-fg/60 mb-4">
-              Tenant-scoped communication sent to authorized teachers of {school?.name}.
-            </p>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in-up"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="announcement-modal-title"
+          onClick={() => setModalOpen(false)}
+        >
+          <div
+            className="card w-full max-w-lg p-6 bg-card border border-border shadow-card-elevated relative max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 id="announcement-modal-title" className="text-lg font-bold text-fg">
+                New Faculty Announcement
+              </h2>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="btn-outline text-xs px-2.5 py-1 font-semibold"
+                aria-label="Close dialog"
+              >
+                Close
+              </button>
+            </div>
 
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-fg mb-1">Title</label>
+                <label className="label">Announcement Title</label>
                 <input
                   type="text"
-                  required
-                  placeholder="e.g. CBSE Pedagogical Alignment Workshop"
+                  placeholder="e.g. Term 2 Curriculum Alignment Workshop"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full rounded-lg border border-fg/15 bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                  className="input"
+                  required
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-fg mb-1">Target Audience</label>
-                  <select
-                    value={audience}
-                    onChange={(e) => setAudience(e.target.value as AnnouncementAudience)}
-                    className="w-full rounded-lg border border-fg/15 bg-surface px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
-                  >
-                    <option value="all">All Teachers</option>
-                    <option value="teacher_admins">Teacher Admins Only</option>
-                    <option value="department">Specific Department</option>
-                  </select>
-                </div>
-
-                {audience === "department" && (
-                  <div>
-                    <label className="block text-xs font-medium text-fg mb-1">Department</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Science"
-                      value={department}
-                      onChange={(e) => setDepartment(e.target.value)}
-                      className="w-full rounded-lg border border-fg/15 bg-surface px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
-                    />
-                  </div>
-                )}
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-fg mb-1">Content</label>
+                <label className="label">Target Audience</label>
+                <select
+                  value={audience}
+                  onChange={(e) => setAudience(e.target.value as any)}
+                  className="input"
+                >
+                  <option value="all">All School Faculty & Staff</option>
+                  <option value="teachers">Classroom Teachers Only</option>
+                  <option value="teacher_admins">Teacher Admins Only</option>
+                  <option value="department">Specific Academic Department</option>
+                </select>
+              </div>
+
+              {audience === "department" && (
+                <div>
+                  <label className="label">Department Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Science or Mathematics"
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    className="input"
+                    required
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="label">Message Content</label>
                 <textarea
-                  rows={4}
-                  required
-                  placeholder="Write announcement details for teachers…"
+                  rows={5}
+                  placeholder="Draft your communication bulletin here…"
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  className="w-full rounded-lg border border-fg/15 bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                  className="input py-2.5"
+                  required
                 />
               </div>
 
-              <label className="flex items-center gap-2 text-xs text-fg/80 cursor-pointer">
+              <label className="flex items-center gap-2 text-xs text-fg cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={publishImmediately}
                   onChange={(e) => setPublishImmediately(e.target.checked)}
-                  className="rounded border-fg/20 text-accent focus:ring-accent"
+                  className="rounded border-border text-accent focus:ring-accent"
                 />
-                <span>Publish immediately to teacher dashboards & notification center</span>
+                <span>Publish immediately to teacher dashboards</span>
               </label>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2.5 pt-4 border-t border-border">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
@@ -233,12 +307,8 @@ export default function AdminAnnouncements() {
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="btn-primary text-xs"
-                >
-                  {submitting ? "Broadcasting…" : publishImmediately ? "Publish Announcement" : "Save as Draft"}
+                <button type="submit" disabled={submitting} className="btn-primary text-xs">
+                  {submitting ? "Saving…" : publishImmediately ? "Publish Announcement" : "Save Draft"}
                 </button>
               </div>
             </form>
