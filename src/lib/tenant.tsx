@@ -54,20 +54,41 @@ export const DEFAULT_SCHOOLS: Record<string, School> = {
   },
 };
 
+// Domain mapping for verified platform seed schools
+export const SEED_SCHOOL_DOMAINS: Record<string, string> = {
+  "royal.kairo.com": "royal",
+  "royal.localhost": "royal",
+  "oxford.kairo.com": "oxford",
+  "oxford.localhost": "oxford",
+};
+
 /**
  * Extract subdomain from hostname.
  * Examples:
  *   "royal.kairo.com" -> "royal"
+ *   "royal.localhost" -> "royal"
+ *   "kairo.in" -> null (main platform)
+ *   "kairo-x7or.vercel.app" -> null (main platform)
+ *   "royal.kairo.in" -> "royal"
  *   "greenfield.kairo.com" -> "greenfield"
  *   "kairo.com" -> null
  *   "www.kairo.com" -> null
- *   "royal.localhost" -> "royal"
  *   "localhost" -> null (unless in local dev mode)
  */
 export function extractSubdomain(hostname: string): string | null {
-  const host = hostname.toLowerCase().split(":")[0].trim();
+  if (!hostname) return null;
 
-  // Localhost subdomains (e.g., royal.localhost)
+  // 1. Normalize hostname: lowercase, remove port, trim whitespace, remove trailing dot
+  const host = hostname.toLowerCase().split(":")[0].trim().replace(/\.$/, "");
+  if (!host) return null;
+
+  // 2. Pure IP addresses are never school subdomains
+  const isIpv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(host);
+  if (isIpv4 || host === "::1") {
+    return null;
+  }
+
+  // 3. Localhost subdomains (e.g., royal.localhost, oxford.localhost)
   if (host.endsWith(".localhost")) {
     const parts = host.split(".");
     if (parts.length >= 2 && parts[0] !== "www") {
@@ -75,50 +96,155 @@ export function extractSubdomain(hostname: string): string | null {
     }
     return null;
   }
-
-  // Pure IP addresses are not subdomains
-  const isIpv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(host);
-  if (isIpv4) {
+  if (host === "localhost" || host === "127.0.0.1") {
+    // In local dev, allow query param / session storage overrides
+    if (typeof window !== "undefined" && !import.meta.env.PROD) {
+      const params = new URLSearchParams(window.location.search);
+      const paramSub = params.get("school") || params.get("subdomain");
+      if (paramSub) return paramSub.toLowerCase().trim();
+      const stored = sessionStorage.getItem("kairo_dev_subdomain");
+      if (stored) return stored.toLowerCase().trim();
+    }
     return null;
   }
 
-  // Reserved platform subdomains
-  const reservedPrefixes = new Set([
-    "www", "app", "api", "admin", "platform", "console", "status", "mail", "auth"
-  ]);
-
-  // Production or custom multi-part domains (*.kairo.com, *.kairo.in, etc.)
-  const parts = host.split(".");
-  if (parts.length >= 3) {
-    // If hosted on vercel preview e.g. project-git-branch.vercel.app
-    if (host.endsWith(".vercel.app") && parts.length === 3) {
-      // Standard vercel project root (e.g., kairo.vercel.app)
+  // 4. Vercel deployment root: e.g. "kairo-x7or.vercel.app" -> null
+  if (host.endsWith(".vercel.app")) {
+    const parts = host.split(".");
+    if (parts.length === 3) {
+      // Direct Vercel project deployment root (e.g., kairo-x7or.vercel.app)
       return null;
     }
+    if (parts.length >= 4 && parts[0] !== "www") {
+      // Subdomain on Vercel preview (e.g., royal.kairo-x7or.vercel.app)
+      return parts[0];
+    }
+    return null;
+  }
 
+  // 5. Main platform root domains (e.g., "kairo.com", "kairo.in", "www.kairo.com", "www.kairo.in")
+  const mainPlatformDomains = ["kairo.com", "kairo.in", "kairo.org", "kairo.io", "kairo.app", "kairo.net"];
+
+  if (mainPlatformDomains.includes(host)) {
+    return null;
+  }
+
+  // Reserved platform prefixes
+  const reservedPrefixes = new Set([
+    "www", "app", "api", "admin", "platform", "console", "status", "mail", "auth", "login"
+  ]);
+
+  // Check for platform apex domain matches (e.g., royal.kairo.com or royal.kairo.in)
+  for (const apex of mainPlatformDomains) {
+    if (host.endsWith("." + apex)) {
+      const prefix = host.slice(0, -(apex.length + 1));
+      const parts = prefix.split(".");
+      const sub = parts[parts.length - 1];
+      if (!reservedPrefixes.has(sub)) {
+        return sub;
+      }
+      return null;
+    }
+  }
+
+  // 6. Generic multi-part domains (3+ parts)
+  const parts = host.split(".");
+  if (parts.length >= 3) {
     const sub = parts[0];
     if (!reservedPrefixes.has(sub)) {
       return sub;
     }
+    return null;
   }
 
-  // In local development ONLY (localhost or 127.0.0.1 or dev mode),
-  // allow query param (?school=slug or ?subdomain=slug) or session storage for manual testing.
-  // In production, query parameter overrides MUST be ignored to prevent cross-tenant parameter tampering.
-  const isLocalDev =
-    typeof window !== "undefined" &&
-    (host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost") || !import.meta.env.PROD);
-
-  if (isLocalDev && typeof window !== "undefined") {
+  // 7. In local dev ONLY, allow query parameter override
+  if (typeof window !== "undefined" && !import.meta.env.PROD) {
     const params = new URLSearchParams(window.location.search);
     const paramSub = params.get("school") || params.get("subdomain");
     if (paramSub) return paramSub.toLowerCase().trim();
-
     const stored = sessionStorage.getItem("kairo_dev_subdomain");
     if (stored) return stored.toLowerCase().trim();
   }
 
   return null;
+}
+
+/**
+ * Resolve school tenant from Supabase schema and verified fallbacks.
+ * Queries both `school_domains.hostname` and `schools.slug` / `schools.domain`.
+ */
+export async function resolveSchoolTenant(
+  slug: string | null,
+  rawHostname?: string
+): Promise<{ school: School | null; error: string | null }> {
+  if (!slug) {
+    return { school: null, error: null };
+  }
+
+  const hostname = (
+    rawHostname || (typeof window !== "undefined" ? window.location.hostname : "")
+  )
+    .toLowerCase()
+    .split(":")[0]
+    .trim()
+    .replace(/\.$/, "");
+
+  // 1. Query Supabase `school_domains` table by hostname (matches royal.localhost, royal.kairo.com, etc.)
+  if (supabase && hostname) {
+    try {
+      const { data: domainData, error: domainErr } = await supabase
+        .from("school_domains")
+        .select("school_id, hostname, schools(*)")
+        .eq("hostname", hostname)
+        .maybeSingle();
+
+      if (!domainErr && domainData?.schools) {
+        const sch = domainData.schools as unknown as School;
+        if (sch && sch.is_active) {
+          return { school: sch, error: null };
+        }
+      }
+    } catch (e) {
+      console.warn("Could not query school_domains:", e);
+    }
+  }
+
+  // 2. Query Supabase `schools` table by slug or domain
+  if (supabase) {
+    try {
+      const filter = hostname
+        ? `slug.eq.${slug},domain.eq.${hostname}`
+        : `slug.eq.${slug}`;
+
+      const { data: schoolData, error: schoolErr } = await supabase
+        .from("schools")
+        .select("*")
+        .or(filter)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (!schoolErr && schoolData) {
+        return { school: schoolData as School, error: null };
+      }
+    } catch (e) {
+      console.warn("Could not query schools:", e);
+    }
+  }
+
+  // 3. Check verified fallback seed schools (by slug, domain, or registered hostname)
+  const mappedSlug = SEED_SCHOOL_DOMAINS[hostname] || slug;
+  const verifiedSchool =
+    DEFAULT_SCHOOLS[mappedSlug] ||
+    Object.values(DEFAULT_SCHOOLS).find(
+      (s) => s.slug === mappedSlug || s.domain === hostname || s.slug === slug
+    );
+
+  if (verifiedSchool && verifiedSchool.is_active) {
+    return { school: verifiedSchool, error: null };
+  }
+
+  // 4. Unknown or inactive school subdomain
+  return { school: null, error: "SCHOOL_NOT_FOUND" };
 }
 
 const TenantContext = createContext<TenantContextValue | undefined>(undefined);
@@ -144,37 +270,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       setError(null);
 
-      // 1. Query Supabase schools table dynamically by slug or domain
-      if (supabase) {
-        const hostname = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "";
-        const { data, error: err } = await supabase
-          .from("schools")
-          .select("*")
-          .or(`slug.eq.${slug},domain.eq.${hostname}`)
-          .eq("is_active", true)
-          .maybeSingle();
-
-        if (err) {
-          console.warn("Could not query schools from Supabase:", err);
-        }
-
-        if (data) {
-          setSchool(data as School);
-          setLoading(false);
-          return;
-        }
-      }
-
-      // 2. In local development or mock preview mode only: fallback to default mock schools
-      if (!import.meta.env.PROD && DEFAULT_SCHOOLS[slug]) {
-        setSchool(DEFAULT_SCHOOLS[slug]);
-        setLoading(false);
-        return;
-      }
-
-      // 3. School does not exist or is inactive in production
-      setSchool(null);
-      setError("SCHOOL_NOT_FOUND");
+      const res = await resolveSchoolTenant(slug);
+      setSchool(res.school);
+      setError(res.error);
     } catch (e) {
       console.error("Tenant resolution error:", e);
       setSchool(null);
